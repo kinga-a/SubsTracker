@@ -3856,7 +3856,15 @@ const configPage = `
               <label class="inline-flex items-center">
                 <input type="checkbox" name="enabledNotifiers" value="email" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                 <span class="ml-2 text-sm text-gray-700">邮件通知</span>
-              </label>
+              </label>	
+              <label class="inline-flex items-center">
+                  <input type="checkbox" name="enabledNotifiers" value="dingtalk" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                  <span class="ml-2 text-sm text-gray-700">钉钉通知</span>
+                </label>
+                <label class="inline-flex items-center">
+                  <input type="checkbox" name="enabledNotifiers" value="feishu" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                  <span class="ml-2 text-sm font-medium text-gray-700">飞书通知</span>
+                </label>
               <label class="inline-flex items-center">
                 <input type="checkbox" name="enabledNotifiers" value="bark" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                 <span class="ml-2 text-sm text-gray-700">Bark</span>
@@ -4027,6 +4035,77 @@ const configPage = `
             </div>
           </div>
 
+
+            <div id="dingtalkConfig" class="config-section">
+              <h4 class="text-md font-medium text-gray-900 mb-3">钉钉通知 配置</h4>
+              <div class="grid grid-cols-1 gap-4 mb-4">
+                <div>
+                  <label for="dingtalkWebhook" class="block text-sm font-medium text-gray-700">钉钉机器人 Webhook URL</label>
+                  <input type="url" id="dingtalkWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=your-token" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <p class="mt-1 text-sm text-gray-500">从钉钉群聊中添加机器人获取的 Webhook URL</p>
+                </div>
+                <div>
+                  <label for="dingtalkSecret" class="block text-sm font-medium text-gray-700">签名密钥 (可选)</label>
+                  <input type="text" id="dingtalkSecret" placeholder="SEC开头的签名密钥" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <p class="mt-1 text-sm text-gray-500">如果机器人设置了签名，请填写SEC开头的密钥</p>
+                </div>
+                <div>
+                  <label for="dingtalkMsgType" class="block text-sm font-medium text-gray-700">消息类型</label>
+                  <select id="dingtalkMsgType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="text">文本消息</option>
+                    <option value="markdown">Markdown消息</option>
+                  </select>
+                  <p class="mt-1 text-sm text-gray-500">选择发送的消息格式类型</p>
+                </div>
+                <div>
+                  <label for="dingtalkAtMobiles" class="block text-sm font-medium text-gray-700">@手机号 (可选)</label>
+                  <input type="text" id="dingtalkAtMobiles" placeholder="13800138000,13900139000" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <p class="mt-1 text-sm text-gray-500">需要@的手机号，多个用逗号分隔，留空则不@任何人</p>
+                </div>
+                <div>
+                  <label for="dingtalkAtAll" class="block text-sm font-medium text-gray-700 mb-2">@所有人</label>
+                  <label class="inline-flex items-center">
+                    <input type="checkbox" id="dingtalkAtAll" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                    <span class="ml-2 text-sm text-gray-700">发送消息时@所有人</span>
+                  </label>
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <button type="button" id="testDingTalkBtn" class="btn-secondary text-white px-4 py-2 rounded-md text-sm font-medium">
+                  <i class="fas fa-paper-plane mr-2"></i>测试 钉钉通知
+                </button>
+              </div>
+            </div>
+  
+            <div id="feishuConfig" class="config-section">
+              <h4 class="text-md font-medium text-gray-900 mb-3">飞书通知 配置</h4>
+              <div class="grid grid-cols-1 gap-4 mb-4">
+                <div>
+                  <label for="feishuWebhook" class="block text-sm font-medium text-gray-700">飞书机器人 Webhook URL</label>
+                  <input type="url" id="feishuWebhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <p class="mt-1 text-sm text-gray-500">从飞书群聊中添加机器人获取的 Webhook URL</p>
+                </div>
+                <div>
+                  <label for="feishuSecret" class="block text-sm font-medium text-gray-700">签名密钥 (可选)</label>
+                  <input type="text" id="feishuSecret" placeholder="签名密钥" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <p class="mt-1 text-sm text-gray-500">如果机器人设置了签名，请填写签名密钥</p>
+                </div>
+                <div>
+                  <label for="feishuMsgType" class="block text-sm font-medium text-gray-700">消息类型</label>
+                  <select id="feishuMsgType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="text">文本消息</option>
+                    <option value="post">富文本消息</option>
+                  </select>
+                  <p class="mt-1 text-sm text-gray-500">选择发送的消息格式类型</p>
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <button type="button" id="testFeishuBtn" class="btn-secondary text-white px-4 py-2 rounded-md text-sm font-medium">
+                  <i class="fas fa-paper-plane mr-2"></i>测试 飞书通知
+                </button>
+              </div>
+            </div>
+
           <div id="barkConfig" class="config-section">
             <h4 class="text-md font-medium text-gray-900 mb-3">Bark 配置</h4>
             <div class="grid grid-cols-1 gap-4 mb-4">
@@ -4111,6 +4190,18 @@ const configPage = `
         document.getElementById('emailFrom').value = config.EMAIL_FROM || '';
         document.getElementById('emailFromName').value = config.EMAIL_FROM_NAME || '订阅提醒系统';
         document.getElementById('emailTo').value = config.EMAIL_TO || '';
+		// 加载钉钉配置
+        document.getElementById('dingtalkWebhook').value = config.DINGTALK_WEBHOOK || '';
+        document.getElementById('dingtalkSecret').value = config.DINGTALK_SECRET || '';
+        document.getElementById('dingtalkMsgType').value =  config.DINGTALK_MSG_TYPE || 'text';
+        document.getElementById('dingtalkAtMobiles').value = config.DINGTALK_AT_MOBILES || '';
+        document.getElementById('dingtalkAtAll').checked = config.DINGTALK_AT_ALL === 'true';
+  
+        // 加载飞书配置
+        document.getElementById('feishuWebhook').value = config.FEISHU_WEBHOOK || '';
+        document.getElementById('feishuSecret').value = config.FEISHU_SECRET || '';
+        document.getElementById('feishuMsgType').value = config.FEISHU_MSG_TYPE || 'text';
+		
         document.getElementById('barkServer').value = config.BARK_SERVER || 'https://api.day.app';
         document.getElementById('barkDeviceKey').value = config.BARK_DEVICE_KEY || '';
         document.getElementById('barkIsArchive').checked = config.BARK_IS_ARCHIVE === 'true';
@@ -4187,10 +4278,12 @@ const configPage = `
       const webhookConfig = document.getElementById('webhookConfig');
       const wechatbotConfig = document.getElementById('wechatbotConfig');
       const emailConfig = document.getElementById('emailConfig');
+      const dingtalkConfig = document.getElementById('dingtalkConfig');
+      const feishuConfig = document.getElementById('feishuConfig');	  
       const barkConfig = document.getElementById('barkConfig');
 
       // 重置所有配置区域
-      [telegramConfig, notifyxConfig, webhookConfig, wechatbotConfig, emailConfig, barkConfig].forEach(config => {
+      [telegramConfig, notifyxConfig, webhookConfig, wechatbotConfig, emailConfig, dingtalkConfig, feishuConfig, barkConfig].forEach(config => {
         config.classList.remove('active', 'inactive');
         config.classList.add('inactive');
       });
@@ -4212,6 +4305,12 @@ const configPage = `
         } else if (type === 'email') {
           emailConfig.classList.remove('inactive');
           emailConfig.classList.add('active');
+        } else if (type === 'dingtalk') {
+          dingtalkConfig.classList.remove('inactive');
+          dingtalkConfig.classList.add('active');
+        } else if (type === 'feishu') {
+          feishuConfig.classList.remove('inactive');
+          feishuConfig.classList.add('active');		  
         } else if (type === 'bark') {
           barkConfig.classList.remove('inactive');
           barkConfig.classList.add('active');
@@ -4256,6 +4355,15 @@ const configPage = `
         EMAIL_FROM: document.getElementById('emailFrom').value.trim(),
         EMAIL_FROM_NAME: document.getElementById('emailFromName').value.trim(),
         EMAIL_TO: document.getElementById('emailTo').value.trim(),
+		DINGTALK_WEBHOOK: document.getElementById('dingtalkWebhook').value.trim(),
+        DINGTALK_SECRET: document.getElementById('dingtalkSecret').value.trim(),
+        DINGTALK_MSG_TYPE: document.getElementById('dingtalkMsgType').value,
+        DINGTALK_AT_MOBILES: document.getElementById('dingtalkAtMobiles').value.trim(),
+        DINGTALK_AT_ALL: document.getElementById('dingtalkAtAll').checked.toString(),
+        FEISHU_WEBHOOK: document.getElementById('feishuWebhook').value.trim(),
+        FEISHU_SECRET: document.getElementById('feishuSecret').value.trim(),
+        FEISHU_MSG_TYPE: document.getElementById('feishuMsgType').value,
+		  
         BARK_SERVER: document.getElementById('barkServer').value.trim() || 'https://api.day.app',
         BARK_DEVICE_KEY: document.getElementById('barkDeviceKey').value.trim(),
         BARK_IS_ARCHIVE: document.getElementById('barkIsArchive').checked.toString(),
@@ -4326,6 +4434,8 @@ const configPage = `
                       type === 'notifyx' ? 'testNotifyXBtn' :
                       type === 'wechatbot' ? 'testWechatBotBtn' :
                       type === 'email' ? 'testEmailBtn' :
+					  type === 'dingtalk' ? 'testDingTalkBtn' :
+                      type === 'feishu' ? 'testFeishuBtn' :
                       type === 'bark' ? 'testBarkBtn' : 'testWebhookBtn';
       const button = document.getElementById(buttonId);
       const originalContent = button.innerHTML;
@@ -4333,6 +4443,8 @@ const configPage = `
                           type === 'notifyx' ? 'NotifyX' :
                           type === 'wechatbot' ? '企业微信机器人' :
                           type === 'email' ? '邮件通知' :
+						  type === 'dingtalk' ? '钉钉通知' :
+                          type === 'feishu' ? '飞书通知' :
                           type === 'bark' ? 'Bark' : 'Webhook 通知';
 
       button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中...';
@@ -4394,6 +4506,30 @@ const configPage = `
           button.disabled = false;
           return;
         }
+		} else if (type === 'dingtalk') {
+          config.DINGTALK_WEBHOOK = document.getElementById('dingtalkWebhook').value.trim();
+          config.DINGTALK_SECRET = document.getElementById('dingtalkSecret').value.trim();
+          config.DINGTALK_MSG_TYPE = document.getElementById('dingtalkMsgType').value;
+          config.DINGTALK_AT_MOBILES = document.getElementById('dingtalkAtMobiles').value.trim();
+          config.DINGTALK_AT_ALL = document.getElementById('dingtalkAtAll').checked.toString();
+  
+          if (!config.DINGTALK_WEBHOOK) {
+            showToast('请先填写钉钉机器人 Webhook URL', 'warning');
+            button.innerHTML = originalContent;
+            button.disabled = false;
+            return;
+          }
+        } else if (type === 'feishu') {
+          config.FEISHU_WEBHOOK = document.getElementById('feishuWebhook').value.trim();
+          config.FEISHU_SECRET = document.getElementById('feishuSecret').value.trim();
+          config.FEISHU_MSG_TYPE = document.getElementById('feishuMsgType').value;
+  
+          if (!config.FEISHU_WEBHOOK) {
+            showToast('请先填写飞书机器人 Webhook URL', 'warning');
+            button.innerHTML = originalContent;
+            button.disabled = false;
+            return;
+          }
       } else if (type === 'bark') {
         config.BARK_SERVER = document.getElementById('barkServer').value.trim() || 'https://api.day.app';
         config.BARK_DEVICE_KEY = document.getElementById('barkDeviceKey').value.trim();
@@ -4449,7 +4585,13 @@ const configPage = `
     document.getElementById('testEmailBtn').addEventListener('click', () => {
       testNotification('email');
     });
-
+    document.getElementById('testDingTalkBtn').addEventListener('click', () => {
+        testNotification('dingtalk');
+      });
+  
+    document.getElementById('testFeishuBtn').addEventListener('click', () => {
+        testNotification('feishu');
+      });
     document.getElementById('testBarkBtn').addEventListener('click', () => {
       testNotification('bark');
     });
@@ -4892,6 +5034,15 @@ const api = {
             EMAIL_FROM: newConfig.EMAIL_FROM || '',
             EMAIL_FROM_NAME: newConfig.EMAIL_FROM_NAME || '',
             EMAIL_TO: newConfig.EMAIL_TO || '',
+			DINGTALK_WEBHOOK: newConfig.DINGTALK_WEBHOOK || '',
+            DINGTALK_SECRET: newConfig.DINGTALK_SECRET || '',
+            DINGTALK_MSG_TYPE: newConfig.DINGTALK_MSG_TYPE || 'text',
+            DINGTALK_AT_MOBILES: newConfig.DINGTALK_AT_MOBILES || '',
+            DINGTALK_AT_ALL: newConfig.DINGTALK_AT_ALL || 'false',
+                      FEISHU_WEBHOOK: newConfig.FEISHU_WEBHOOK || '',
+          FEISHU_SECRET: newConfig.FEISHU_SECRET || '',
+          FEISHU_MSG_TYPE: newConfig.FEISHU_MSG_TYPE || 'text',
+			
             BARK_DEVICE_KEY: newConfig.BARK_DEVICE_KEY || '',
             BARK_SERVER: newConfig.BARK_SERVER || 'https://api.day.app',
             BARK_IS_ARCHIVE: newConfig.BARK_IS_ARCHIVE || 'false',
@@ -5067,6 +5218,35 @@ const api = {
 
           success = await sendEmailNotification(title, content, testConfig);
           message = success ? '邮件通知发送成功' : '邮件通知发送失败，请检查配置';
+		  } else if (body.type === 'dingtalk') {
+            const testConfig = {
+              ...config,
+              DINGTALK_WEBHOOK: body.DINGTALK_WEBHOOK,
+              DINGTALK_SECRET: body.DINGTALK_SECRET,
+              DINGTALK_MSG_TYPE: body.DINGTALK_MSG_TYPE,
+              DINGTALK_AT_MOBILES: body.DINGTALK_AT_MOBILES,
+              DINGTALK_AT_ALL: body.DINGTALK_AT_ALL
+            };
+  
+            const title = '测试通知';
+            const content = '这是一条测试通知，用于验证钉钉通知功能是否正常工作。\n\n发送时间: ' + formatBeijingTime();
+  
+            success = await sendDingTalkNotification(title, content, testConfig);
+            message = success ? '钉钉通知发送成功' : '钉钉通知发送失败，请检查配置';
+          } else if (body.type === 'feishu') {
+            const testConfig = {
+              ...config,
+              FEISHU_WEBHOOK: body.FEISHU_WEBHOOK,
+              FEISHU_SECRET: body.FEISHU_SECRET,
+              FEISHU_MSG_TYPE: body.FEISHU_MSG_TYPE
+            };
+  
+            const title = '测试通知';
+            const content = '这是一条测试通知，用于验证飞书通知功能是否正常工作。\n\n发送时间: ' + formatBeijingTime();
+  
+            success = await sendFeishuNotification(title, content, testConfig);
+            message = success ? '飞书通知发送成功' : '飞书通知发送失败，请检查配置';
+		  
         } else if (body.type === 'bark') {
           const testConfig = {
             ...config,
@@ -5350,6 +5530,13 @@ async function getConfig(env) {
       BARK_SERVER: config.BARK_SERVER || 'https://api.day.app',
       BARK_IS_ARCHIVE: config.BARK_IS_ARCHIVE || 'false',
       ENABLED_NOTIFIERS: config.ENABLED_NOTIFIERS || ['notifyx'],
+      DINGTALK_WEBHOOK: config.DINGTALK_WEBHOOK || '',
+      DINGTALK_SECRET: config.DINGTALK_SECRET || '',
+      DINGTALK_AT_MOBILES: config.DINGTALK_AT_MOBILES || '',
+      DINGTALK_AT_ALL: config.DINGTALK_AT_ALL || 'false',
+      FEISHU_WEBHOOK: config.FEISHU_WEBHOOK || '',
+      FEISHU_SECRET: config.FEISHU_SECRET || '',
+      FEISHU_MSG_TYPE: config.FEISHU_MSG_TYPE || 'text',	  
       TIMEZONE: config.TIMEZONE || 'UTC', // 新增时区字段
       NOTIFICATION_HOURS: Array.isArray(config.NOTIFICATION_HOURS) ? config.NOTIFICATION_HOURS : [],
       THIRD_PARTY_API_TOKEN: config.THIRD_PARTY_API_TOKEN || ''
@@ -5382,6 +5569,13 @@ async function getConfig(env) {
       EMAIL_FROM_NAME: '',
       EMAIL_TO: '',
       ENABLED_NOTIFIERS: ['notifyx'],
+	  DINGTALK_WEBHOOK: '',
+      DINGTALK_SECRET: '',
+      DINGTALK_AT_MOBILES: '',
+      DINGTALK_AT_ALL: 'false',
+      FEISHU_WEBHOOK: '',
+      FEISHU_SECRET: '',
+      FEISHU_MSG_TYPE: 'text',
       NOTIFICATION_HOURS: [],
       TIMEZONE: 'UTC', // 新增时区字段
       THIRD_PARTY_API_TOKEN: ''
@@ -6273,6 +6467,16 @@ async function sendNotificationToAllChannels(title, commonContent, config, logPr
         const success = await sendEmailNotification(title, emailContent, config);
         console.log(`${logPrefix} 发送邮件通知 ${success ? '成功' : '失败'}`);
     }
+      if (config.ENABLED_NOTIFIERS.includes('dingtalk')) {
+          const dingtalkContent = commonContent.replace(/(\**|\*|##|#|`)/g, '');
+          const success = await sendDingTalkNotification(title, dingtalkContent, config);
+          console.log(`${logPrefix} 发送钉钉通知 ${success ? '成功' : '失败'}`);
+      }
+      if (config.ENABLED_NOTIFIERS.includes('feishu')) {
+          const feishuContent = commonContent.replace(/(\**|\*|##|#|`)/g, '');
+          const success = await sendFeishuNotification(title, feishuContent, config);
+          console.log(`${logPrefix} 发送飞书通知 ${success ? '成功' : '失败'}`);
+      }	
     if (config.ENABLED_NOTIFIERS.includes('bark')) {
         const barkContent = commonContent.replace(/(\**|\*|##|#|`)/g, '');
         const success = await sendBarkNotification(title, barkContent, config);
@@ -6337,6 +6541,213 @@ async function sendNotifyXNotification(title, content, description, config) {
     return false;
   }
 }
+
+  async function sendDingTalkNotification(title, content, config) {
+    try {
+      if (!config.DINGTALK_WEBHOOK) {
+        console.error('[钉钉] 通知未配置，缺少Webhook URL');
+        return false;
+      }
+  
+      console.log('[钉钉] 开始发送通知到: ' + config.DINGTALK_WEBHOOK);
+  
+      // 构建消息内容
+      let messageData;
+      const msgType = config.DINGTALK_MSG_TYPE || 'text';
+  
+      if (msgType === 'markdown') {
+        // Markdown 消息格式
+        const markdownContent = `# ${title}\n\n${content}`;
+        messageData = {
+          msgtype: 'markdown',
+          markdown: {
+            title: title,
+            text: markdownContent
+          }
+        };
+      } else {
+        // 文本消息格式
+        const textContent = `${title}\n\n${content}`;
+        messageData = {
+          msgtype: 'text',
+          text: {
+            content: textContent
+          }
+        };
+      }
+  
+      // 处理@功能
+      if (config.DINGTALK_AT_ALL === 'true') {
+        // @所有人
+        messageData.at = { isAtAll: true };
+      } else if (config.DINGTALK_AT_MOBILES) {
+        // @指定手机号
+        const mobiles = config.DINGTALK_AT_MOBILES.split(',').map(m => m.trim()).filter(m => m);
+        if (mobiles.length > 0) {
+          messageData.at = { atMobiles: mobiles };
+        }
+      }
+  
+      console.log('[钉钉] 发送消息数据:', JSON.stringify(messageData, null, 2));
+  
+      // 处理签名验证
+      let webhookUrl = config.DINGTALK_WEBHOOK;
+      if (config.DINGTALK_SECRET) {
+        const timestamp = Date.now();
+        const stringToSign = timestamp + '\n' + config.DINGTALK_SECRET;
+        
+        // 使用 SubtleCrypto 进行 HMAC-SHA256 计算
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(config.DINGTALK_SECRET);
+        const messageData = encoder.encode(stringToSign);
+        
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw',
+          keyData,
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        );
+        
+        const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+        const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+        const signatureEncoded = encodeURIComponent(signatureBase64);
+        
+        const separator = webhookUrl.includes('?') ? '&' : '?';
+        webhookUrl = `${webhookUrl}${separator}timestamp=${timestamp}&sign=${signatureEncoded}`;
+      }
+  
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(messageData)
+      });
+  
+      const responseText = await response.text();
+      console.log('[钉钉] 响应状态:', response.status);
+      console.log('[钉钉] 响应内容:', responseText);
+  
+      if (response.ok) {
+        try {
+          const result = JSON.parse(responseText);
+          if (result.errcode === 0) {
+            console.log('[钉钉] 通知发送成功');
+            return true;
+          } else {
+            console.error('[钉钉] 发送失败，错误码:', result.errcode, '错误信息:', result.errmsg);
+            return false;
+          }
+        } catch (parseError) {
+          console.error('[钉钉] 解析响应失败:', parseError);
+          return false;
+        }
+      } else {
+        console.error('[钉钉] HTTP请求失败，状态码:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('[钉钉] 发送通知失败:', error);
+      return false;
+    }
+  }
+  
+  async function sendFeishuNotification(title, content, config) {
+    try {
+      if (!config.FEISHU_WEBHOOK) {
+        console.error('[飞书] 通知未配置，缺少Webhook URL');
+        return false;
+      }
+  
+      console.log('[飞书] 开始发送通知到: ' + config.FEISHU_WEBHOOK);
+  
+      // 构建消息内容
+      let messageData;
+      const msgType = config.FEISHU_MSG_TYPE || 'text';
+  
+      if (msgType === 'post') {
+        // 富文本消息格式
+        messageData = {
+          msg_type: 'post',
+          content: {
+            post: {
+              zh_cn: {
+                title: title,
+                content: [
+                  [
+                    {
+                      tag: 'text',
+                      text: content
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        };
+      } else {
+        // 文本消息格式
+        messageData = {
+          msg_type: 'text',
+          content: {
+            text: `${title}\n\n${content}`
+          }
+        };
+      }
+  
+      console.log('[飞书] 发送消息数据:', JSON.stringify(messageData, null, 2));
+  
+      // 构建请求头
+      let headers = { 'Content-Type': 'application/json' };
+      if (config.FEISHU_SECRET) {
+        const timestamp = Math.floor(Date.now() / 1000);
+        const stringToSign = `${timestamp}\n${config.FEISHU_SECRET}`;
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(config.FEISHU_SECRET);
+        const messageDataForSign = encoder.encode(stringToSign);
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+        const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageDataForSign);
+        const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
+        headers['X-Lark-Request-Timestamp'] = timestamp.toString();
+        headers['X-Lark-Signature'] = signatureBase64;
+      }
+  
+      const response = await fetch(config.FEISHU_WEBHOOK, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(messageData)
+      });
+  
+      const responseText = await response.text();
+      console.log('[飞书] 响应状态:', response.status);
+      console.log('[飞书] 响应内容:', responseText);
+  
+      if (response.ok) {
+        try {
+          const result = JSON.parse(responseText);
+          if (result.code === 0) {
+            console.log('[飞书] 通知发送成功');
+            return true;
+          } else {
+            console.error('[飞书] 发送失败，错误码:', result.code, '错误信息:', result.msg);
+            return false;
+          }
+        } catch (parseError) {
+          console.error('[飞书] 解析响应失败:', parseError);
+          return false;
+        }
+      } else {
+        console.error('[飞书] HTTP请求失败，状态码:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('[飞书] 发送通知失败:', error);
+      return false;
+    }
+  }
 
 async function sendBarkNotification(title, content, config) {
   try {
