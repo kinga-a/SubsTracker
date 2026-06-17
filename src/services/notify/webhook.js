@@ -1,26 +1,11 @@
 // @ts-check
 /**
- * Webhook 通知渠道（已支持钉钉SEC加签）
+ * Webhook 通知渠道
  *
  * 支持自定义请求方法、Header、消息模板（{{title}} / {{content}} / {{tags}} 等）。
- * 新增：钉钉机器人加签支持，配置 WEBHOOK_DING_SECRET 即可自动携带 timestamp + sign 请求头
  */
 import { ok, fail, errorMessage } from './channel.js';
 import { formatLocalDate } from '../../core/time.js';
-import crypto from 'crypto';
-
-/**
- * 钉钉加签算法：根据密钥 + 毫秒时间戳 计算签名
- * @param {string} secret SEC开头密钥
- * @param {string} timestamp 毫秒时间戳
- * @returns {string} base64编码签名
- */
-function dingTalkSign(secret, timestamp) {
-  const stringToSign = `${timestamp}\n${secret}`;
-  const hmac = crypto.createHmac('sha256', secret);
-  hmac.update(stringToSign, 'utf8');
-  return hmac.digest('base64');
-}
 
 /**
  * 把 value 转成可嵌入 JSON 字符串的安全片段。
@@ -101,17 +86,6 @@ export const webhookChannel = {
     if (!v.ok) return fail('webhook', v.error || '配置无效');
 
     let headers = { 'Content-Type': 'application/json' };
-
-    // ========== 新增钉钉加签逻辑 ==========
-    // 如果配置了钉钉SEC密钥，自动计算签名并塞入请求头
-    if (config.WEBHOOK_DING_SECRET && config.WEBHOOK_DING_SECRET.trim() !== '') {
-      const timestampMs = Date.now().toString(); // 毫秒时间戳
-      const sign = dingTalkSign(config.WEBHOOK_DING_SECRET.trim(), timestampMs);
-      headers['timestamp'] = timestampMs;
-      headers['sign'] = sign;
-    }
-
-    // 合并用户自定义请求头
     if (config.WEBHOOK_HEADERS) {
       try {
         const customHeaders = JSON.parse(config.WEBHOOK_HEADERS);
