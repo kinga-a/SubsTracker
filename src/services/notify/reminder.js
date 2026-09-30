@@ -1,6 +1,19 @@
-import { formatTimeInTimezone, formatTimezoneDisplay } from '../../core/time.js';
+import { formatTimeInTimezone, formatTimezoneDisplay, getTimezoneDateParts } from '../../core/time.js';
 import { lunarCalendar } from '../../core/lunar.js';
 import { formatAmount } from '../../core/currency-format.js';
+
+/**
+ * 按用户时区把到期日转成农历展示文案，避免用 Date 本地分量导致差一天。
+ *
+ * @param {Date | string | number} expiry
+ * @param {string} timezone
+ * @returns {string} 空串表示无法转换或不展示
+ */
+function formatLunarExpiryText(expiry, timezone) {
+  const parts = getTimezoneDateParts(expiry, timezone || 'UTC');
+  const lunarExpiry = lunarCalendar.solar2lunar(parts.year, parts.month, parts.day);
+  return lunarExpiry ? `\n农历日期: ${lunarExpiry.fullStr}` : '';
+}
 
 function resolveReminderSetting(subscription) {
   const defaultDays = subscription && subscription.reminderDays !== undefined ? Number(subscription.reminderDays) : 7;
@@ -48,6 +61,15 @@ function shouldTriggerReminder(reminder, daysDiff, hoursDiff) {
   return daysDiff >= 0 && daysDiff <= reminder.value;
 }
 
+function formatMatchedReminderRule(rule) {
+  if (rule.type === 'on_expiry') return '到期当天';
+  if (rule.type === 'after_expiry') {
+    return `到期后每 ${rule.repeatInterval || 24} 小时`;
+  }
+  if (rule.value === 0) return rule.unit === 'hours' ? '到期当小时' : '到期当天';
+  return `提前 ${rule.value} ${rule.unit === 'hours' ? '小时' : '天'}`;
+}
+
 function formatNotificationContent(subscriptions, config) {
   const showLunar = config.SHOW_LUNAR === true;
   const timezone = config?.TIMEZONE || 'UTC';
@@ -57,15 +79,14 @@ function formatNotificationContent(subscriptions, config) {
     const typeText = sub.customType || '其他';
     const periodText = (sub.periodValue && sub.periodUnit) ? `(周期: ${sub.periodValue} ${ { day: '天', month: '月', year: '年' }[sub.periodUnit] || sub.periodUnit})` : '';
     const categoryText = sub.category ? sub.category : '未分类';
-    const reminderSetting = resolveReminderSetting(sub);
+    const reminderSetting = sub.matchedReminderRule ? null : resolveReminderSetting(sub);
 
     const expiryDateObj = new Date(sub.expiryDate);
     const formattedExpiryDate = formatTimeInTimezone(expiryDateObj, timezone, 'date');
 
     let lunarExpiryText = '';
     if (showLunar) {
-      const lunarExpiry = lunarCalendar.solar2lunar(expiryDateObj.getFullYear(), expiryDateObj.getMonth() + 1, expiryDateObj.getDate());
-      lunarExpiryText = lunarExpiry ? `\n农历日期: ${lunarExpiry.fullStr}` : '';
+      lunarExpiryText = formatLunarExpiryText(expiryDateObj, timezone);
     }
 
     let statusText = '';
@@ -81,12 +102,12 @@ function formatNotificationContent(subscriptions, config) {
       statusText = `将在 ${sub.daysRemaining} 天后到期`;
     }
 
-    const reminderSuffix = reminderSetting.value === 0
+    const reminderSuffix = reminderSetting?.value === 0
       ? '（仅到期时提醒）'
-      : (reminderSetting.unit === 'hour' ? '（小时级提醒）' : '');
-    const reminderText = reminderSetting.unit === 'hour'
-      ? `提醒策略: 提前 ${reminderSetting.value} 小时${reminderSuffix}`
-      : `提醒策略: 提前 ${reminderSetting.value} 天${reminderSuffix}`;
+      : (reminderSetting?.unit === 'hour' ? '（小时级提醒）' : '');
+    const reminderText = sub.matchedReminderRule
+      ? `提醒策略: ${formatMatchedReminderRule(sub.matchedReminderRule)}`
+      : `提醒策略: 提前 ${reminderSetting.value} ${reminderSetting.unit === 'hour' ? '小时' : '天'}${reminderSuffix}`;
 
     const calendarType = sub.useLunar ? '农历' : '公历';
     const autoRenewText = sub.autoRenew ? '是' : '否';
