@@ -15,7 +15,9 @@ const SECRET_FIELDS = [
   'SERVERCHAN_SENDKEY',
   'PUSHPLUS_TOKEN',
   'NTFY_TOKEN',
-  'WPUSH_APIKEY'
+  'WPUSH_APIKEY',
+  'DINGTALK_WEBHOOK',
+  'DINGTALK_SECRET'
 ];
 
 function isConfiguredSecret(value) {
@@ -126,6 +128,12 @@ async function handleUpdateConfig(request, env) {
       WPUSH_APIKEY: mergeSecretField(config, newConfig, 'WPUSH_APIKEY', clearSecretFields),
       WPUSH_CHANNEL: (newConfig.WPUSH_CHANNEL || '').trim(),
       WPUSH_TOPIC_CODE: (newConfig.WPUSH_TOPIC_CODE || '').trim(),
+
+      DINGTALK_WEBHOOK: mergeSecretField(config, newConfig, 'DINGTALK_WEBHOOK', clearSecretFields),
+      DINGTALK_SECRET: mergeSecretField(config, newConfig, 'DINGTALK_SECRET', clearSecretFields),
+      DINGTALK_MSG_TYPE: newConfig.DINGTALK_MSG_TYPE || 'text',
+      DINGTALK_AT_MOBILES: (newConfig.DINGTALK_AT_MOBILES || '').trim(),
+      DINGTALK_AT_ALL: newConfig.DINGTALK_AT_ALL || 'false',
 
       ENABLED_NOTIFIERS: newConfig.ENABLED_NOTIFIERS || ['notifyx'],
       TIMEZONE: newConfig.TIMEZONE || config.TIMEZONE || 'UTC',

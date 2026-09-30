@@ -1,6 +1,6 @@
 # SubsTracker — 订阅管理与提醒系统
 
-基于 **Cloudflare Workers + KV** 的轻量级订阅到期提醒。在网页里管理订阅，到点通过 Telegram / Bark / 企业微信 / ntfy 等 **11 种渠道** 推送，并自带发送与调度日志方便排查。
+基于 **Cloudflare Workers + KV** 的轻量级订阅到期提醒。在网页里管理订阅，到点通过 Telegram / Bark / 企业微信 / 钉钉 / ntfy 等 **12 种渠道** 推送，并自带发送与调度日志方便排查。
 
 **适合**：个人自托管、域名/会员/账单到期提醒。  
 **不适合**：多用户协作、复杂企业审批流。
@@ -128,6 +128,7 @@ Cloudflare Dashboard → **Workers & Pages → KV** → 打开 `SUBSCRIPTIONS_KV
 | Telegram | Bot Token + Chat ID；Forum 群可选 Topic ID |
 | Bark | Device Key；自建可填 Server |
 | 企业微信 | 群机器人 Webhook |
+| 钉钉 | 机器人 Webhook URL；安全设置选「加签」时填 SEC 开头的签名密钥 |
 | ntfy | Server（默认 ntfy.sh）+ Topic；可选 Token |
 | WPUSH | API Key；可选 Channel / Topic 编码 |
 | 邮件 | Resend API Key + 收发邮箱 |
@@ -228,9 +229,11 @@ Cloudflare Dashboard → **Workers & Pages → KV** → 打开 `SUBSCRIPTIONS_KV
 - 多规则提醒、农历周期、自动/手动续订、支付历史  
 - 季/半年快捷、公历月末选项  
 
-### 通知渠道（10）
+### 通知渠道（12）
 
-Telegram · NotifyX · Webhook · 企业微信 · Resend 邮件 · Bark · Gotify · Server酱 · PushPlus · ntfy · **WPUSH**
+Telegram · NotifyX · Webhook · 企业微信 · Resend 邮件 · Bark · Gotify · Server酱 · PushPlus · ntfy · **WPUSH** · **钉钉**
+
+> 钉钉渠道支持群机器人安全设置里的「加签」：在系统配置填写 SEC 开头的签名密钥后，系统会自动计算 `timestamp + sign`（HMAC-SHA256）并追加到 Webhook URL，无需手动拼接。
 
 ### 可观测
 
@@ -322,6 +325,14 @@ curl -X POST "https://你的域名.workers.dev/api/notify/你的令牌" \
 ```
 
 也可用请求头：`Authorization: Bearer 你的令牌`。
+
+### 14. 钉钉机器人开了「加签」，怎么配？
+
+1. 钉钉群 → 群机器人设置里选「加签」，复制 `SEC` 开头的密钥
+2. 系统配置 → 通知方式勾选「钉钉通知」，填入机器人的 Webhook URL 和签名密钥
+3. 点「测试 钉钉通知」，收到消息即配置成功
+
+系统会自动按钉钉官方算法计算 `timestamp` 与 `sign`（HMAC-SHA256）追加到 URL，不需要手动拼接参数；消息类型支持文本 / Markdown，可设置 `@手机号` 或 `@所有人`。
 
 ---
 

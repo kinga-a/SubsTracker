@@ -290,6 +290,10 @@
                 <input type="checkbox" name="enabledNotifiers" value="wpush" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
                 <span class="ml-2 text-sm text-gray-700">WPUSH</span>
               </label>
+              <label class="inline-flex items-center">
+                <input type="checkbox" name="enabledNotifiers" value="dingtalk" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                <span class="ml-2 text-sm text-gray-700">钉钉通知</span>
+              </label>
             </div>
             <div class="mt-2 flex flex-wrap gap-4">
               <a href="https://www.notifyx.cn/" target="_blank" class="text-indigo-600 hover:text-indigo-800 text-sm">
@@ -716,6 +720,59 @@
               </button>
             </div>
           </div>
+
+          <div id="dingtalkConfig" class="config-section">
+            <h4 class="text-md font-medium text-gray-900 mb-3">钉钉通知 配置</h4>
+            <div class="grid grid-cols-1 gap-4 mb-4">
+              <div>
+                <label for="dingtalkWebhook" class="block text-sm font-medium text-gray-700">钉钉机器人 Webhook URL</label>
+                <div class="mt-1 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <input type="url" id="dingtalkWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=your-token" class="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <button type="button" id="clearDingtalkWebhook" class="btn-warning text-white px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap">
+                    <i class="fas fa-eraser mr-2"></i>清空
+                  </button>
+                </div>
+                <p id="DINGTALK_WEBHOOKStatus" class="mt-1 text-xs text-gray-500">加载中...</p>
+                <p class="mt-1 text-sm text-gray-500">从钉钉群聊中添加机器人获取的 Webhook URL</p>
+              </div>
+              <div>
+                <label for="dingtalkSecret" class="block text-sm font-medium text-gray-700">签名密钥（可选）</label>
+                <div class="mt-1 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <input type="password" id="dingtalkSecret" placeholder="SEC开头的加签密钥" class="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <button type="button" id="clearDingtalkSecret" class="btn-warning text-white px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap">
+                    <i class="fas fa-eraser mr-2"></i>清空
+                  </button>
+                </div>
+                <p id="DINGTALK_SECRETStatus" class="mt-1 text-xs text-gray-500">加载中...</p>
+                <p class="mt-1 text-sm text-gray-500">钉钉机器人安全设置选「加签」时填写，留空表示未启用加签</p>
+              </div>
+              <div>
+                <label for="dingtalkMsgType" class="block text-sm font-medium text-gray-700">消息类型</label>
+                <select id="dingtalkMsgType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                  <option value="text">文本消息</option>
+                  <option value="markdown">Markdown消息</option>
+                </select>
+                <p class="mt-1 text-sm text-gray-500">选择发送的消息格式类型</p>
+              </div>
+              <div>
+                <label for="dingtalkAtMobiles" class="block text-sm font-medium text-gray-700">@手机号 (可选)</label>
+                <input type="text" id="dingtalkAtMobiles" placeholder="13800138000,13900139000" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <p class="mt-1 text-sm text-gray-500">需要@的手机号，多个用逗号分隔，留空则不@任何人</p>
+              </div>
+              <div>
+                <label for="dingtalkAtAll" class="block text-sm font-medium text-gray-700 mb-2">@所有人</label>
+                <label class="inline-flex items-center">
+                  <input type="checkbox" id="dingtalkAtAll" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                  <span class="ml-2 text-sm text-gray-700">发送消息时@所有人</span>
+                </label>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <button type="button" id="testDingTalkBtn" class="btn-secondary text-white px-4 py-2 rounded-md text-sm font-medium">
+                <i class="fas fa-paper-plane mr-2"></i>测试 钉钉通知
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="flex justify-end">
@@ -841,6 +898,8 @@
       setSecretStatus('SERVERCHAN_SENDKEY', cfg.SERVERCHAN_SENDKEY ? '已配置（已隐藏）' : '未配置');
       setSecretStatus('PUSHPLUS_TOKEN', cfg.PUSHPLUS_TOKEN ? '已配置（已隐藏）' : '未配置');
       setSecretStatus('WPUSH_APIKEY', cfg.WPUSH_APIKEY ? '已配置（已隐藏）' : '未配置');
+      setSecretStatus('DINGTALK_WEBHOOK', cfg.DINGTALK_WEBHOOK ? '已配置（已隐藏）' : '未配置');
+      setSecretStatus('DINGTALK_SECRET', cfg.DINGTALK_SECRET ? '已配置（已隐藏）' : '未配置');
     }
 
     function wireSecretInput(inputId, key) {
@@ -899,6 +958,9 @@
         document.getElementById('wechatbotMsgType').value = config.WECHATBOT_MSG_TYPE || 'text';
         document.getElementById('wechatbotAtMobiles').value = config.WECHATBOT_AT_MOBILES || '';
         document.getElementById('wechatbotAtAll').checked = config.WECHATBOT_AT_ALL === 'true';
+        document.getElementById('dingtalkMsgType').value = config.DINGTALK_MSG_TYPE || 'text';
+        document.getElementById('dingtalkAtMobiles').value = config.DINGTALK_AT_MOBILES || '';
+        document.getElementById('dingtalkAtAll').checked = config.DINGTALK_AT_ALL === 'true';
         document.getElementById('emailFrom').value = config.EMAIL_FROM || '';
         document.getElementById('emailFromName').value = config.EMAIL_FROM_NAME || '订阅提醒系统';
         document.getElementById('emailTo').value = config.EMAIL_TO || '';
@@ -925,6 +987,8 @@
         document.getElementById('serverchanSendKey').value = '';
         document.getElementById('pushplusToken').value = '';
         if (document.getElementById('wpushApikey')) document.getElementById('wpushApikey').value = '';
+        document.getElementById('dingtalkWebhook').value = '';
+        document.getElementById('dingtalkSecret').value = '';
 
         window.SECRET_CONFIGURED = {
           TG_BOT_TOKEN: config.TG_BOT_TOKEN_CONFIGURED === true,
@@ -939,7 +1003,9 @@
           NTFY_TOKEN: config.NTFY_TOKEN_CONFIGURED === true,
           SERVERCHAN_SENDKEY: config.SERVERCHAN_SENDKEY_CONFIGURED === true,
           PUSHPLUS_TOKEN: config.PUSHPLUS_TOKEN_CONFIGURED === true,
-          WPUSH_APIKEY: config.WPUSH_APIKEY_CONFIGURED === true
+          WPUSH_APIKEY: config.WPUSH_APIKEY_CONFIGURED === true,
+          DINGTALK_WEBHOOK: config.DINGTALK_WEBHOOK_CONFIGURED === true,
+          DINGTALK_SECRET: config.DINGTALK_SECRET_CONFIGURED === true
         };
 
         updateAllSecretStatus();
@@ -1053,9 +1119,10 @@
       const serverchanConfig = document.getElementById('serverchanConfig');
       const pushplusConfig = document.getElementById('pushplusConfig');
       const wpushConfig = document.getElementById('wpushConfig');
+      const dingtalkConfig = document.getElementById('dingtalkConfig');
 
       // 重置所有配置区域
-      [telegramConfig, notifyxConfig, webhookConfig, wechatbotConfig, emailConfig, barkConfig, gotifyConfig, serverchanConfig, pushplusConfig, ntfyConfig, wpushConfig].forEach(config => {
+      [telegramConfig, notifyxConfig, webhookConfig, wechatbotConfig, emailConfig, barkConfig, gotifyConfig, serverchanConfig, pushplusConfig, ntfyConfig, wpushConfig, dingtalkConfig].forEach(config => {
         config.classList.remove('active', 'inactive');
         config.classList.add('inactive');
       });
@@ -1095,6 +1162,9 @@
         } else if (type === 'wpush' && wpushConfig) {
           wpushConfig.classList.remove('inactive');
           wpushConfig.classList.add('active');
+        } else if (type === 'dingtalk' && dingtalkConfig) {
+          dingtalkConfig.classList.remove('inactive');
+          dingtalkConfig.classList.add('active');
         }
       });
     }
@@ -1135,6 +1205,8 @@
         SERVERCHAN_SENDKEY: document.getElementById('serverchanSendKey').value.trim(),
         PUSHPLUS_TOKEN: document.getElementById('pushplusToken').value.trim(),
         WPUSH_APIKEY: (document.getElementById('wpushApikey') && document.getElementById('wpushApikey').value.trim()) || '',
+        DINGTALK_WEBHOOK: document.getElementById('dingtalkWebhook').value.trim(),
+        DINGTALK_SECRET: document.getElementById('dingtalkSecret').value.trim(),
 
         // 非敏感字段正常提交
         TG_CHAT_ID: document.getElementById('tgChatId').value.trim(),
@@ -1158,6 +1230,9 @@
         NTFY_TOKEN: (document.getElementById('ntfyToken') && document.getElementById('ntfyToken').value.trim()) || '',
         WPUSH_CHANNEL: (document.getElementById('wpushChannel') && document.getElementById('wpushChannel').value.trim()) || '',
         WPUSH_TOPIC_CODE: (document.getElementById('wpushTopicCode') && document.getElementById('wpushTopicCode').value.trim()) || '',
+        DINGTALK_MSG_TYPE: document.getElementById('dingtalkMsgType').value,
+        DINGTALK_AT_MOBILES: document.getElementById('dingtalkAtMobiles').value.trim(),
+        DINGTALK_AT_ALL: document.getElementById('dingtalkAtAll').checked.toString(),
         ENABLED_NOTIFIERS: enabledNotifiers,
         TIMEZONE: document.getElementById('timezone').value.trim(),
 
@@ -1242,7 +1317,8 @@
                       type === 'serverchan' ? 'testServerchanBtn' :
                       type === 'pushplus' ? 'testPushplusBtn' :
                       type === 'ntfy' ? 'testNtfyBtn' :
-                      type === 'wpush' ? 'testWpushBtn' : 'testWebhookBtn';
+                      type === 'wpush' ? 'testWpushBtn' :
+                      type === 'dingtalk' ? 'testDingTalkBtn' : 'testWebhookBtn';
       const button = document.getElementById(buttonId);
       if (!button) {
         showToast('测试按钮不存在，请刷新页面后重试', 'error');
@@ -1258,7 +1334,8 @@
                           type === 'serverchan' ? 'Server酱' :
                           type === 'pushplus' ? 'PushPlus' :
                           type === 'ntfy' ? 'ntfy' :
-                          type === 'wpush' ? 'WPUSH' : 'Webhook 通知';
+                          type === 'wpush' ? 'WPUSH' :
+                          type === 'dingtalk' ? '钉钉通知' : 'Webhook 通知';
 
       button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中...';
       button.disabled = true;
@@ -1322,6 +1399,14 @@
         if (key) config.WPUSH_APIKEY = key;
         config.WPUSH_CHANNEL = (document.getElementById('wpushChannel') && document.getElementById('wpushChannel').value.trim()) || '';
         config.WPUSH_TOPIC_CODE = (document.getElementById('wpushTopicCode') && document.getElementById('wpushTopicCode').value.trim()) || '';
+      } else if (type === 'dingtalk') {
+        config.DINGTALK_MSG_TYPE = document.getElementById('dingtalkMsgType').value;
+        config.DINGTALK_AT_MOBILES = document.getElementById('dingtalkAtMobiles').value.trim();
+        config.DINGTALK_AT_ALL = document.getElementById('dingtalkAtAll').checked.toString();
+        const url = document.getElementById('dingtalkWebhook').value.trim();
+        const secret = document.getElementById('dingtalkSecret').value.trim();
+        if (url) config.DINGTALK_WEBHOOK = url;
+        if (secret) config.DINGTALK_SECRET = secret;
       }
 
       try {
@@ -1400,6 +1485,13 @@
     if (testWpushBtn) {
       testWpushBtn.addEventListener('click', () => {
         testNotification('wpush');
+      });
+    }
+
+    const testDingTalkBtn = document.getElementById('testDingTalkBtn');
+    if (testDingTalkBtn) {
+      testDingTalkBtn.addEventListener('click', () => {
+        testNotification('dingtalk');
       });
     }
 

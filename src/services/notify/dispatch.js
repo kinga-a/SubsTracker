@@ -20,6 +20,7 @@ import { serverChanChannel } from './serverchan.js';
 import { pushplusChannel } from './pushplus.js';
 import { ntfyChannel } from './ntfy.js';
 import { wpushChannel } from './wpush.js';
+import { dingtalkChannel } from './dingtalk.js';
 import { writeLog } from '../../data/notification-logs.repo.js';
 
 /** 名字到渠道实例的映射；新增渠道在此注册即可 */
@@ -34,7 +35,8 @@ export const ALL_CHANNELS = {
   serverchan: serverChanChannel,
   pushplus: pushplusChannel,
   ntfy: ntfyChannel,
-  wpush: wpushChannel
+  wpush: wpushChannel,
+  dingtalk: dingtalkChannel
 };
 
 /**

@@ -11,6 +11,7 @@ import { sendServerChanNotification } from '../../services/notify/serverchan.js'
 import { sendPushPlusNotification } from '../../services/notify/pushplus.js';
 import { sendNtfyNotification } from '../../services/notify/ntfy.js';
 import { sendWPushNotification } from '../../services/notify/wpush.js';
+import { sendDingTalkNotification } from '../../services/notify/dingtalk.js';
 
 async function handleTestNotification(request, env) {
   try {
@@ -20,7 +21,7 @@ async function handleTestNotification(request, env) {
     let message = '';
 
     const type = typeof body.type === 'string' ? body.type.trim() : '';
-    const supportedTypes = ['telegram', 'notifyx', 'webhook', 'wechatbot', 'email', 'bark', 'gotify', 'serverchan', 'pushplus', 'ntfy', 'wpush'];
+    const supportedTypes = ['telegram', 'notifyx', 'webhook', 'wechatbot', 'email', 'bark', 'gotify', 'serverchan', 'pushplus', 'ntfy', 'wpush', 'dingtalk'];
 
     if (!type) {
       return new Response(
@@ -194,6 +195,25 @@ async function handleTestNotification(request, env) {
       const content = '这是一条测试通知，用于验证 WPUSH 通知功能是否正常工作。\n\n发送时间: ' + formatBeijingTime();
       success = await sendWPushNotification(title, content, testConfig);
       message = success ? 'WPUSH 通知发送成功' : 'WPUSH 通知发送失败，请检查配置';
+    } else if (type === 'dingtalk') {
+      const testConfig = {
+        ...config,
+        DINGTALK_WEBHOOK: (typeof body.DINGTALK_WEBHOOK === 'string' && body.DINGTALK_WEBHOOK.trim().length > 0)
+          ? body.DINGTALK_WEBHOOK.trim()
+          : config.DINGTALK_WEBHOOK,
+        DINGTALK_SECRET: (typeof body.DINGTALK_SECRET === 'string' && body.DINGTALK_SECRET.trim().length > 0)
+          ? body.DINGTALK_SECRET.trim()
+          : config.DINGTALK_SECRET,
+        DINGTALK_MSG_TYPE: body.DINGTALK_MSG_TYPE || config.DINGTALK_MSG_TYPE,
+        DINGTALK_AT_MOBILES: body.DINGTALK_AT_MOBILES || config.DINGTALK_AT_MOBILES,
+        DINGTALK_AT_ALL: body.DINGTALK_AT_ALL || config.DINGTALK_AT_ALL
+      };
+
+      const title = '测试通知';
+      const content = '这是一条测试通知，用于验证钉钉通知功能是否正常工作。\n\n发送时间: ' + formatBeijingTime();
+
+      success = await sendDingTalkNotification(title, content, testConfig);
+      message = success ? '钉钉通知发送成功' : '钉钉通知发送失败，请检查配置';
     }
 
     return new Response(

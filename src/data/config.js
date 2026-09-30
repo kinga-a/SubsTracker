@@ -41,7 +41,12 @@ const DEFAULT_CONFIG = {
   NTFY_TOKEN: '',
   WPUSH_APIKEY: '',
   WPUSH_CHANNEL: '',
-  WPUSH_TOPIC_CODE: ''
+  WPUSH_TOPIC_CODE: '',
+  DINGTALK_WEBHOOK: '',
+  DINGTALK_SECRET: '',
+  DINGTALK_MSG_TYPE: 'text',
+  DINGTALK_AT_MOBILES: '',
+  DINGTALK_AT_ALL: 'false'
 };
 
 async function getConfig(env) {

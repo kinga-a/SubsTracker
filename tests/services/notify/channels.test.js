@@ -23,6 +23,7 @@ import { pushplusChannel } from '../../../src/services/notify/pushplus.js';
 import { wpushChannel } from '../../../src/services/notify/wpush.js';
 import { emailChannel } from '../../../src/services/notify/email.js';
 import { webhookChannel } from '../../../src/services/notify/webhook.js';
+import { dingtalkChannel } from '../../../src/services/notify/dingtalk.js';
 import { dispatch, ALL_CHANNELS, testChannel } from '../../../src/services/notify/dispatch.js';
 import { query } from '../../../src/data/notification-logs.repo.js';
 
@@ -318,9 +319,9 @@ describe('testChannel', () => {
 });
 
 describe('注册表完整性', () => {
-  it('ALL_CHANNELS 包含 11 个渠道', () => {
+  it('ALL_CHANNELS 包含 12 个渠道', () => {
     expect(Object.keys(ALL_CHANNELS).sort()).toEqual(
-      ['bark', 'email', 'gotify', 'notifyx', 'ntfy', 'pushplus', 'serverchan', 'telegram', 'webhook', 'wechatbot', 'wpush'].sort()
+      ['bark', 'dingtalk', 'email', 'gotify', 'notifyx', 'ntfy', 'pushplus', 'serverchan', 'telegram', 'webhook', 'wechatbot', 'wpush'].sort()
     );
   });
 
@@ -336,6 +337,107 @@ describe('注册表完整性', () => {
 
 
 import { ntfyChannel } from '../../../src/services/notify/ntfy.js';
+
+describe('dingtalkChannel', () => {
+  it('validateConfig：缺 webhook 返回错误', () => {
+    expect(dingtalkChannel.validateConfig({}).ok).toBe(false);
+    expect(dingtalkChannel.validateConfig({ DINGTALK_WEBHOOK: 'https://oapi.dingtalk.com/robot/send?access_token=x' }).ok).toBe(true);
+  });
+
+  it('send 成功路径：text 消息 + 无加签', async () => {
+    const captured = vi.fn();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      captured(url, init);
+      return jsonResponse({ errcode: 0, errmsg: 'ok' });
+    });
+
+    const r = await dingtalkChannel.send(
+      { title: '到期提醒', content: 'xx 即将到期' },
+      { DINGTALK_WEBHOOK: 'https://oapi.dingtalk.com/robot/send?access_token=TOKEN' }
+    );
+    expect(r.success).toBe(true);
+
+    const [url, init] = captured.mock.calls[0];
+    expect(String(url)).toBe('https://oapi.dingtalk.com/robot/send?access_token=TOKEN');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body.msgtype).toBe('text');
+    expect(body.text.content).toContain('到期提醒');
+    expect(body.at).toBeUndefined();
+  });
+
+  it('send 成功路径：markdown + @手机号', async () => {
+    const captured = vi.fn();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      captured(url, init);
+      return jsonResponse({ errcode: 0, errmsg: 'ok' });
+    });
+
+    const r = await dingtalkChannel.send(
+      { title: '到期提醒', content: '正文' },
+      {
+        DINGTALK_WEBHOOK: 'https://oapi.dingtalk.com/robot/send?access_token=TOKEN',
+        DINGTALK_MSG_TYPE: 'markdown',
+        DINGTALK_AT_MOBILES: '13800138000, 13900139000',
+        DINGTALK_AT_ALL: 'false'
+      }
+    );
+    expect(r.success).toBe(true);
+
+    const [url, init] = captured.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.msgtype).toBe('markdown');
+    expect(body.markdown.title).toBe('到期提醒');
+    expect(body.at.atMobiles).toEqual(['13800138000', '13900139000']);
+  });
+
+  it('加签：URL 追加 timestamp & sign，且签名与标准 HMAC-SHA256 一致', async () => {
+    const captured = vi.fn();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      captured(url, init);
+      return jsonResponse({ errcode: 0, errmsg: 'ok' });
+    });
+
+    const secret = 'SEC0000000000000000000000000000000000000';
+    const r = await dingtalkChannel.send(
+      { title: 't', content: 'c' },
+      { DINGTALK_WEBHOOK: 'https://oapi.dingtalk.com/robot/send?access_token=TOKEN', DINGTALK_SECRET: secret }
+    );
+    expect(r.success).toBe(true);
+
+    const [url] = captured.mock.calls[0];
+    const parsed = new URL(String(url));
+    const timestamp = parsed.searchParams.get('timestamp');
+    const sign = parsed.searchParams.get('sign');
+    expect(timestamp).toBeTruthy();
+    expect(sign).toBeTruthy();
+
+    // 用 Node 标准 crypto 复算钉钉官方算法：sign = base64(hmac-sha256(secret, `${ts}\n${secret}`))
+    const { createHmac } = await import('node:crypto');
+    const expected = createHmac('sha256', secret).update(`${timestamp}\n${secret}`).digest('base64');
+    expect(decodeURIComponent(sign)).toBe(expected);
+  });
+
+  it('钉钉业务失败（errcode != 0）返回失败', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ errcode: 310000, errmsg: 'sign not match' }));
+    const r = await dingtalkChannel.send(
+      { title: 't', content: 'c' },
+      { DINGTALK_WEBHOOK: 'https://oapi.dingtalk.com/robot/send?access_token=TOKEN', DINGTALK_SECRET: 'SEC123' }
+    );
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('sign not match');
+  });
+
+  it('HTTP 失败返回失败', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('err', { status: 500 }));
+    const r = await dingtalkChannel.send(
+      { title: 't', content: 'c' },
+      { DINGTALK_WEBHOOK: 'https://oapi.dingtalk.com/robot/send?access_token=TOKEN' }
+    );
+    expect(r.success).toBe(false);
+    expect(r.error).toContain('HTTP 500');
+  });
+});
 
 describe('ntfyChannel', () => {
   it('validateConfig：缺 topic 失败', () => {
