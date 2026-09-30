@@ -75,6 +75,24 @@ npm run deploy:safe
 
 3. 推送到 `master` / `main` 或手动运行 **Deploy** workflow  
 
+### 方式三：单文件部署（worker.js / Cloudflare 控制台）
+
+适合：不想装环境、或想直接在控制台粘贴代码部署。
+
+```bash
+npm run bundle        # 用 esbuild 把所有模块 + 页面打包成根目录 worker.js
+```
+
+然后把 `worker.js` 的内容粘贴到 Cloudflare 控制台 → **Workers & Pages** → 创建/编辑 Worker，并手动补三项配置：
+
+| 配置 | 值 |
+|------|-----|
+| KV 绑定 | `SUBSCRIPTIONS_KV` → 你的命名空间（首次部署先创建） |
+| 触发器 Cron | `0 * * * *`（每小时整点检查） |
+| 变量 | `ENVIRONMENT = production` |
+
+> 单文件模式已把 `public/js/lib/api-client.js` 内联进通知日志页，**不再依赖静态资源目录**；重新打包用 `npm run bundle`，改完源码后记得重跑。
+
 ### 默认登录
 
 | 项 | 值 |
@@ -356,6 +374,7 @@ npm run deploy:safe
 npm install
 npm test           # 单元 / 集成测试
 npm run lint
+npm run bundle     # 打包成单文件 worker.js（esbuild，含全部页面模板）
 npx wrangler dev --config wrangler.dev.toml --local
 # http://127.0.0.1:8787  默认 admin / password
 ```
