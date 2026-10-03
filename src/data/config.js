@@ -49,11 +49,30 @@ const DEFAULT_CONFIG = {
   DINGTALK_AT_ALL: 'false'
 };
 
+/**
+ * isolate 级配置缓存。
+ *
+ * 背景：config 是全站最高频的 KV key（登录校验、各 handler、定时任务都会读），
+ * 每次请求都 `KV.get('config')` 造成大量热读。这里用 30s TTL 的内存缓存
+ * 吸收读峰值；setConfig 写时同步更新缓存，保证"保存后立即可见"。
+ *
+ * 一致性说明：跨数据中心 / isolate 的传播延迟 ≤30s，与 KV 自身的最终一致性
+ * 同量级，个人单用户场景可接受。
+ */
+let cachedConfig = null;
+let cachedAt = 0;
+const CONFIG_CACHE_TTL_MS = 30 * 1000;
+
 async function getConfig(env) {
   if (!env.SUBSCRIPTIONS_KV) {
     console.error('[配置] KV存储未绑定');
     throw new Error('KV存储未绑定');
   }
+  const now = Date.now();
+  if (cachedConfig && now - cachedAt < CONFIG_CACHE_TTL_MS) {
+    return { ...cachedConfig };
+  }
+
   const data = await env.SUBSCRIPTIONS_KV.get('config');
   console.log('[配置] 从KV读取配置:', data ? '成功' : '空配置');
   const config = data ? JSON.parse(data) : {};
@@ -66,15 +85,47 @@ async function getConfig(env) {
     await env.SUBSCRIPTIONS_KV.put('config', JSON.stringify(updatedConfig));
   }
 
-  return {
+  const result = {
     ...DEFAULT_CONFIG,
     ...config,
     JWT_SECRET: jwtSecret
   };
+  cachedConfig = result;
+  cachedAt = now;
+  return { ...result };
 }
 
 async function setConfig(env, config) {
   await putKVJson(env, 'config', config);
+
+  // 写时同步缓存：JWT_SECRET 缺失时从旧缓存 / 旧 KV 继承，避免会话失效
+  let secret = config.JWT_SECRET;
+  if (!secret) {
+    if (cachedConfig && cachedConfig.JWT_SECRET) {
+      secret = cachedConfig.JWT_SECRET;
+    } else {
+      try {
+        const prev = await env.SUBSCRIPTIONS_KV.get('config');
+        if (prev) {
+          const parsed = JSON.parse(prev);
+          if (parsed.JWT_SECRET) secret = parsed.JWT_SECRET;
+        }
+      } catch (err) {
+        console.error('[配置] 读取旧 JWT_SECRET 失败:', err);
+      }
+    }
+  }
+  const merged = { ...DEFAULT_CONFIG, ...config };
+  if (secret) merged.JWT_SECRET = secret;
+  cachedConfig = merged;
+  cachedAt = Date.now();
+  return merged;
+}
+
+/** 测试用：清除内存缓存，强制下次重新读取 KV。 */
+export function _resetConfigCache() {
+  cachedConfig = null;
+  cachedAt = 0;
 }
 
 export {

@@ -192,7 +192,9 @@ async function handleReminderRoute(request, env, method, subId, ruleId) {
 }
 
 /**
- * GET /api/notification-logs?subId=&channel=&status=&since=&limit=
+ * GET /api/notification-logs?subId=&channel=&status=&since=&until=&limit=&cursor=
+ *
+ * cursor：上一页返回的 nextCursor（ymdh UTC），用于"加载更多"继续向前翻页。
  *
  * @param {Request} request
  * @param {{ SUBSCRIPTIONS_KV: KVNamespace }} env
@@ -207,10 +209,11 @@ async function handleNotifyLogsList(request, env) {
       (url.searchParams.get('status') || undefined),
     since: url.searchParams.get('since') || undefined,
     until: url.searchParams.get('until') || undefined,
-    limit: Number(url.searchParams.get('limit') || 100)
+    limit: Number(url.searchParams.get('limit') || 100),
+    cursor: url.searchParams.get('cursor') || undefined
   };
-  const logs = await notifyLogsRepo.query(env, filter);
-  return json({ success: true, logs });
+  const { items, nextCursor } = await notifyLogsRepo.queryPage(env, filter);
+  return json({ success: true, logs: items, nextCursor });
 }
 
 /**

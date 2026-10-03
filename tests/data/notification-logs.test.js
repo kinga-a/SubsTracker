@@ -58,25 +58,34 @@ describe('notification-logs.repo', () => {
   });
 
   it('query 按 since/until 时间区间过滤', async () => {
-    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: '2026-05-20T00:00:00Z' });
-    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: '2026-05-22T00:00:00Z' });
-    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: '2026-05-24T00:00:00Z' });
-    const r = await query(env, { since: '2026-05-21T00:00:00Z', until: '2026-05-23T00:00:00Z' });
+    const now = Date.now();
+    const ago = (ms) => new Date(now - ms).toISOString();
+    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: ago(4 * 3600 * 1000) });
+    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: ago(2 * 3600 * 1000) });
+    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: ago(0) });
+    const r = await query(env, { since: ago(3 * 3600 * 1000), until: ago(1 * 3600 * 1000) });
     expect(r).toHaveLength(1);
+    expect(r[0].timestamp).toBe(ago(2 * 3600 * 1000));
   });
 
   it('query 按时间倒序返回', async () => {
-    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: '2026-05-20T00:00:00Z' });
-    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: '2026-05-22T00:00:00Z' });
-    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: '2026-05-24T00:00:00Z' });
+    const now = Date.now();
+    const t2 = new Date(now - 2 * 24 * 3600 * 1000).toISOString();
+    const t1 = new Date(now - 1 * 24 * 3600 * 1000).toISOString();
+    const t0 = new Date(now).toISOString();
+    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: t2 });
+    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: t1 });
+    await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: t0 });
     const r = await query(env, {});
-    expect(r[0].timestamp).toContain('2026-05-24');
-    expect(r[2].timestamp).toContain('2026-05-20');
+    expect(r[0].timestamp).toBe(t0);
+    expect(r[1].timestamp).toBe(t1);
+    expect(r[2].timestamp).toBe(t2);
   });
 
   it('query.limit 限制返回数', async () => {
+    const now = Date.now();
     for (let i = 0; i < 5; i++) {
-      await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: `2026-05-${20 + i}T00:00:00Z` });
+      await writeLog(env, { subId: 's1', channel: 'tg', status: 'success', timestamp: new Date(now - i * 3600 * 1000).toISOString() });
     }
     const r = await query(env, { limit: 3 });
     expect(r).toHaveLength(3);

@@ -17,6 +17,7 @@ import * as subRepo from '../../src/data/subscriptions.repo.js';
 import * as remindersRepo from '../../src/data/reminders.repo.js';
 import { getRecent } from '../../src/data/scheduler-logs.repo.js';
 import { query as queryNotifyLogs } from '../../src/data/notification-logs.repo.js';
+import { _resetConfigCache } from '../../src/data/config.js';
 
 async function clearKv() {
   const list = await env.SUBSCRIPTIONS_KV.list();
@@ -40,6 +41,7 @@ function mockTelegramOk() {
 
 beforeEach(async () => {
   await clearKv();
+  _resetConfigCache();
   vi.useRealTimers();
 });
 

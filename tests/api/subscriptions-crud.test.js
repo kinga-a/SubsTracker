@@ -80,7 +80,7 @@ describe('订阅 CRUD', () => {
     expect(body.success).toBe(false);
   });
 
-  it('列表返回 reminderRules 摘要字段', async () => {
+  it('列表返回内嵌提醒摘要（不再附带完整规则数组）', async () => {
     const cookie = await loginCookie();
     await app.request(
       '/api/subscriptions',
@@ -100,7 +100,8 @@ describe('订阅 CRUD', () => {
     const listRes = await app.request('/api/subscriptions', { headers: { Cookie: cookie } }, env);
     const list = await listRes.json();
     expect(Array.isArray(list)).toBe(true);
-    expect(list[0].reminderRules).toBeTruthy();
+    // 优化后：列表不再逐条带规则数组（编辑弹窗按需拉取），摘要内嵌在订阅里
+    expect(list[0].reminderRules).toBeUndefined();
     expect(list[0].reminderRulesSummary).toMatch(/30|提前/);
   });
 

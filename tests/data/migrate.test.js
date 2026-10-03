@@ -196,7 +196,7 @@ describe('migrate.ensureMigrations（编排器）', () => {
 
     const r1 = await ensureMigrations(env);
     expect(r1.migrated).toBe(false);
-    expect(r1.reason).toBe('already_v3');
+    expect(r1.reason).toBe('already_' + SCHEMA_VERSION);
 
     const r2 = await ensureMigrations(env);
     expect(r2.reason).toBe('cached'); // 二次走内存缓存
@@ -213,7 +213,7 @@ describe('migrate.ensureMigrations（编排器）', () => {
     // 第二次：schema_version 已就位，应直接跳过
     const r2 = await ensureMigrations(env);
     expect(r2.migrated).toBe(false);
-    expect(r2.reason).toBe('already_v3');
+    expect(r2.reason).toBe('already_' + SCHEMA_VERSION);
 
     expect((await subRepo.listIds(env)).length).toBe(1);
   });

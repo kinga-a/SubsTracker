@@ -207,6 +207,15 @@
         </table>
       </div>
     </div>
+
+    <!-- 加载更多（游标分页） -->
+    <div id="loadMoreWrap" class="hidden text-center py-5">
+      <button id="loadMoreBtn" type="button"
+        class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+        <i class="fas fa-chevron-down mr-2"></i>加载更多
+      </button>
+      <p id="loadMoreHint" class="text-xs text-gray-400 mt-2"></p>
+    </div>
   </div>
 
   <script>
@@ -304,6 +313,10 @@
      */
     let userTz = 'UTC';
     let subNameMap = {};
+    // 游标分页状态
+    let allLogs = [];
+    let nextCursor = null;
+    let loadingMore = false;
 
     function fmtTime(iso) {
       try {
@@ -398,7 +411,7 @@
       }
     }
 
-    async function loadLogs() {
+    async function loadLogs(append) {
       const subId = document.getElementById('filterSubId').value.trim();
       const channel = document.getElementById('filterChannel').value;
       const status = document.getElementById('filterStatus').value;
@@ -411,23 +424,47 @@
       if (sinceHours) {
         params.since = new Date(Date.now() - Number(sinceHours) * 3600 * 1000).toISOString();
       }
+      if (append && nextCursor) params.cursor = nextCursor;
 
       const tbody = document.getElementById('logsBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">加载中…</td></tr>';
+      const btn = document.getElementById('loadMoreBtn');
+      if (!append) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">加载中…</td></tr>';
+        document.getElementById('loadMoreWrap').classList.add('hidden');
+      }
       try {
         const data = await ApiClient.get('/api/notification-logs', params);
         const logs = (data && data.logs) || [];
-
-        document.getElementById('metricTotal').textContent = logs.length;
-        document.getElementById('metricSuccess').textContent = logs.filter(l => l.status === 'success').length;
-        document.getElementById('metricFailed').textContent = logs.filter(l => l.status === 'failed').length;
-        document.getElementById('metricLatest').textContent = logs.length ? fmtTime(logs[0].timestamp) : '-';
-
-        if (logs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">没有匹配的记录</td></tr>';
-          return;
+        nextCursor = (data && data.nextCursor) || null;
+        if (!append) allLogs = [];
+        allLogs = allLogs.concat(logs);
+        renderMetrics();
+        renderRows();
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>加载更多'; }
+      } catch (err) {
+        if (append) {
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>加载更多'; }
+          const hint = document.getElementById('loadMoreHint');
+          if (hint) hint.textContent = '加载失败：' + err.message;
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-500">加载失败：' + escapeHtml(err.message) + '</td></tr>';
         }
-        tbody.innerHTML = logs.map(l => {
+      }
+    }
+
+    function renderMetrics() {
+      document.getElementById('metricTotal').textContent = allLogs.length;
+      document.getElementById('metricSuccess').textContent = allLogs.filter(l => l.status === 'success').length;
+      document.getElementById('metricFailed').textContent = allLogs.filter(l => l.status === 'failed').length;
+      document.getElementById('metricLatest').textContent = allLogs.length ? fmtTime(allLogs[0].timestamp) : '-';
+    }
+
+    function renderRows() {
+      const tbody = document.getElementById('logsBody');
+      if (allLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">没有匹配的记录</td></tr>';
+      } else {
+        tbody.innerHTML = allLogs.map(l => {
           const subName = subNameMap[l.subId] || l.subId;
           const rowClass = l.status === 'failed' ? 'row-failed' : 'row-success';
           return '<tr class="' + rowClass + ' hover:bg-opacity-75">'
@@ -439,9 +476,9 @@
             + '<td class="px-4 py-3 align-top text-xs">' + buildDetail(l) + '</td>'
             + '</tr>';
         }).join('');
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-500">加载失败：' + escapeHtml(err.message) + '</td></tr>';
       }
+      const wrap = document.getElementById('loadMoreWrap');
+      if (wrap) wrap.classList.toggle('hidden', !nextCursor);
     }
 
     // ─── 事件绑定 ───
@@ -453,6 +490,16 @@
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', loadLogs);
     });
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', () => {
+        if (loadingMore) return;
+        loadingMore = true;
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>加载中…';
+        loadLogs(true).finally(() => { loadingMore = false; });
+      });
+    }
 
     // ─── 实时时钟（与其他 admin 页一致的实现）───
     function formatTimezoneDisplay(tz) {

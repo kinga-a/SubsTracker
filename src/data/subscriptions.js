@@ -73,25 +73,35 @@ function buildTimezoneDate(year, month, day, timezone) {
 
 /**
  * 获取所有订阅（从新 repo 读取）。
- * 会附带 reminderRules / reminderRulesSummary，供列表展示真实提醒策略。
+ *
+ * 读取优化：订阅上内嵌 `reminderRulesSummary`（写规则时由 syncLegacyReminderFields
+ * 同步，迁移 step `sub_summary_v3` 为老数据补齐），列表场景无需再逐条读
+ * `reminder_rules:{subId}`，读从 2N+1 降到 N+1。
+ *
+ * 注意：此处不再返回完整 reminderRules 数组——编辑弹窗使用独立的
+ * `GET /api/subscriptions/:id/reminders` 按需加载（前端已有该回退逻辑）。
+ * 老数据缺失摘要时仍回退读取规则计算一次，保证兼容。
  *
  * @param {any} env
  * @returns {Promise<Array<any>>}
  */
 async function getAllSubscriptions(env) {
   try {
-    const { listForSubscription, formatRulesSummary, legacyFieldToRule } = await import('./reminders.repo.js');
     const subs = await subRepo.listAll(env);
     return Promise.all(
       subs.map(async (sub) => {
-        let rules = await listForSubscription(env, sub.id);
-        if (rules.length === 0) {
-          rules = [legacyFieldToRule(sub)];
+        let summary = sub.reminderRulesSummary;
+        if (!summary) {
+          const { listForSubscription, formatRulesSummary, legacyFieldToRule } = await import('./reminders.repo.js');
+          let rules = await listForSubscription(env, sub.id);
+          if (rules.length === 0) {
+            rules = [legacyFieldToRule(sub)];
+          }
+          summary = formatRulesSummary(rules);
         }
         return {
           ...sub,
-          reminderRules: rules,
-          reminderRulesSummary: formatRulesSummary(rules)
+          reminderRulesSummary: summary
         };
       })
     );
@@ -102,7 +112,7 @@ async function getAllSubscriptions(env) {
 }
 
 /**
- * 将多规则同步回订阅上的 legacy 提醒字段，避免列表/旧路径与规则脱节。
+ * 将多规则同步回订阅上的 legacy 提醒字段 + 内嵌摘要，避免列表/旧路径与规则脱节。
  *
  * @param {any} env
  * @param {string} subId
@@ -110,7 +120,7 @@ async function getAllSubscriptions(env) {
  */
 async function syncLegacyReminderFields(env, subId, rules) {
   try {
-    const { deriveLegacyFromRules } = await import('./reminders.repo.js');
+    const { deriveLegacyFromRules, formatRulesSummary } = await import('./reminders.repo.js');
     const existing = await subRepo.getById(env, subId);
     if (!existing) return;
     const legacy = deriveLegacyFromRules(rules);
@@ -120,6 +130,7 @@ async function syncLegacyReminderFields(env, subId, rules) {
       reminderValue: legacy.value,
       reminderDays: legacy.unit === 'day' ? legacy.value : undefined,
       reminderHours: legacy.unit === 'hour' ? legacy.value : undefined,
+      reminderRulesSummary: formatRulesSummary(rules),
       updatedAt: new Date().toISOString()
     });
   } catch (error) {

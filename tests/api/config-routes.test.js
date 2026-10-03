@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // @ts-ignore
 import { env } from 'cloudflare:test';
 import app from '../../src/app.js';
-import { getConfig } from '../../src/data/config.js';
+import { getConfig, _resetConfigCache } from '../../src/data/config.js';
 
 async function clearKv() {
   const list = await env.SUBSCRIPTIONS_KV.list();
@@ -40,7 +40,10 @@ async function loginCookie() {
   return res.headers.get('Set-Cookie')?.split(';')[0] || '';
 }
 
-beforeEach(clearKv);
+beforeEach(async () => {
+  await clearKv();
+  _resetConfigCache();
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe('GET /api/config', () => {

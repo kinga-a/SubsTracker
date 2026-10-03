@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // @ts-ignore
 import { env } from 'cloudflare:test';
 import app from '../../src/app.js';
+import { _resetConfigCache } from '../../src/data/config.js';
 
 async function clearKv() {
   const list = await env.SUBSCRIPTIONS_KV.list();
@@ -14,6 +15,7 @@ async function clearKv() {
 
 beforeEach(async () => {
   await clearKv();
+  _resetConfigCache();
   vi.stubGlobal(
     'fetch',
     async () =>

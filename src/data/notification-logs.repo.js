@@ -103,6 +103,8 @@ export async function writeLog(env, entry) {
 /**
  * 查询通知日志。
  *
+ * 返回数组（与历史签名完全兼容，见 queryPage 获取游标分页）。
+ *
  * @param {{ SUBSCRIPTIONS_KV: KVNamespace }} env
  * @param {{
  *   subId?: string,
@@ -110,51 +112,131 @@ export async function writeLog(env, entry) {
  *   status?: 'success'|'failed',
  *   since?: string|Date|number,
  *   until?: string|Date|number,
- *   limit?: number
+ *   limit?: number,
+ *   cursor?: string
  * }} [filter]
  * @returns {Promise<NotifyLogEntry[]>}
  */
 export async function query(env, filter = {}) {
+  const { items } = await queryInternal(env, filter);
+  return items;
+}
+
+/**
+ * 游标分页查询通知日志。
+ *
+ * 返回 { items, nextCursor }：
+ *   - items      本页日志（按时间倒序）
+ *   - nextCursor 下一页的游标（ymdh UTC 字符串）；null 表示没有更多
+ *
+ * 实现：key 前缀 `notify_log:{ymdh}` 按 UTC 小时分桶，字典序天然按时间升序。
+ * 从最新小时（或 cursor 指定小时）开始逐小时 `KV.list` 下钻，
+ * 只扫描到凑够 limit 就停，不再像旧实现那样全量扫前缀（最多 5000 key）后内存排序。
+ *
+ * @param {{ SUBSCRIPTIONS_KV: KVNamespace }} env
+ * @param {{
+ *   subId?: string,
+ *   channel?: string,
+ *   status?: 'success'|'failed',
+ *   since?: string|Date|number,
+ *   until?: string|Date|number,
+ *   limit?: number,
+ *   cursor?: string
+ * }} [filter]
+ * @returns {Promise<{ items: NotifyLogEntry[], nextCursor: string|null }>}
+ */
+export async function queryPage(env, filter = {}) {
+  return queryInternal(env, filter);
+}
+
+/**
+ * query / queryPage 的公共实现。
+ */
+async function queryInternal(env, filter = {}) {
   const limit = Math.min(500, Math.max(1, filter.limit || 100));
-
-  // KV.list 仅支持前缀，无法按多字段过滤，全部拉到内存再过滤
-  const all = [];
-  let cursor;
-  do {
-    const res = await env.SUBSCRIPTIONS_KV.list({
-      prefix: PREFIX,
-      cursor,
-      limit: 1000
-    });
-    for (const k of res.keys) all.push(k.name);
-    cursor = res.list_complete ? undefined : res.cursor;
-  } while (cursor && all.length < 5000);
-
-  // 按 key 字典序倒序 = 时间倒序（因为 ymdh 在前缀后）
-  all.sort((a, b) => b.localeCompare(a));
-
-  const sinceTs = filter.since ? new Date(filter.since).getTime() : 0;
-  const untilTs = filter.until ? new Date(filter.until).getTime() : Number.POSITIVE_INFINITY;
+  const sinceMs = filter.since ? new Date(filter.since).getTime() : 0;
+  const untilMs = filter.until ? new Date(filter.until).getTime() : Number.POSITIVE_INFINITY;
 
   const out = [];
-  for (const key of all) {
-    if (out.length >= limit) break;
-    const raw = await env.SUBSCRIPTIONS_KV.get(key);
-    if (!raw) continue;
-    try {
-      const obj = JSON.parse(raw);
-      if (filter.subId && obj.subId !== filter.subId) continue;
-      if (filter.channel && obj.channel !== filter.channel) continue;
-      if (filter.status && obj.status !== filter.status) continue;
-      const tsMs = new Date(obj.timestamp).getTime();
-      if (tsMs < sinceTs || tsMs > untilTs) continue;
-      out.push({ key, ...obj });
-    } catch {
-      /* skip */
-    }
+
+  // 起始小时：优先 cursor（含该小时），否则从 until / 当前时刻所在小时开始
+  let currentHour;
+  if (filter.cursor && /^\d{10}$/.test(String(filter.cursor))) {
+    currentHour = String(filter.cursor);
+  } else {
+    const anchor = untilMs === Number.POSITIVE_INFINITY ? Date.now() : Math.min(Date.now(), untilMs);
+    currentHour = ymdhUtc(new Date(anchor));
   }
 
-  return out;
+  // 最多扫 30 天 × 24 小时 = 720 个小时桶；逐页翻时可继续（nextCursor 仍有效）
+  const MAX_SCAN = 720;
+  let guard = 0;
+
+  while (out.length < limit && guard < MAX_SCAN) {
+    guard++;
+    const res = await env.SUBSCRIPTIONS_KV.list({
+      prefix: PREFIX + currentHour,
+      limit: 1000
+    });
+    // 同小时桶内按 key 倒序（rand 后缀近似时间倒序）
+    const keys = res.keys.map((k) => k.name).sort((a, b) => b.localeCompare(a));
+    for (const key of keys) {
+      if (out.length >= limit) break;
+      const raw = await env.SUBSCRIPTIONS_KV.get(key);
+      if (!raw) continue;
+      try {
+        const obj = JSON.parse(raw);
+        if (filter.subId && obj.subId !== filter.subId) continue;
+        if (filter.channel && obj.channel !== filter.channel) continue;
+        if (filter.status && obj.status !== filter.status) continue;
+        const tsMs = new Date(obj.timestamp).getTime();
+        if (tsMs < sinceMs || tsMs > untilMs) continue;
+        out.push({ key, ...obj });
+      } catch {
+        /* skip */
+      }
+    }
+
+    // 前移一小时（UTC）
+    const prev = hourMinus1(currentHour);
+    if (prev === currentHour) {
+      currentHour = null;
+      break;
+    }
+    // since 下界：下一小时完全早于 since 时不再往前扫
+    if (sinceMs > 0) {
+      const hourStartMs = Date.UTC(
+        Number(prev.slice(0, 4)),
+        Number(prev.slice(4, 6)) - 1,
+        Number(prev.slice(6, 8)),
+        Number(prev.slice(8, 10))
+      );
+      if (hourStartMs < sinceMs) {
+        currentHour = null;
+        break;
+      }
+    }
+    currentHour = prev;
+  }
+
+  return { items: out, nextCursor: currentHour };
+}
+
+/**
+ * UTC ymdh 字符串减一小时；越界返回原值（调用方据此判定终止）。
+ * @param {string} ymdh 'YYYYMMDDHH'
+ * @returns {string}
+ */
+function hourMinus1(ymdh) {
+  const d = new Date(Date.UTC(
+    Number(ymdh.slice(0, 4)),
+    Number(ymdh.slice(4, 6)) - 1,
+    Number(ymdh.slice(6, 8)),
+    Number(ymdh.slice(8, 10))
+  ));
+  d.setUTCHours(d.getUTCHours() - 1);
+  const next = ymdhUtc(d);
+  return next === ymdh ? ymdh : next;
 }
 
 /**

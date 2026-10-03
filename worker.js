@@ -39,6 +39,10 @@ async function getConfig(env) {
     console.error("[\u914D\u7F6E] KV\u5B58\u50A8\u672A\u7ED1\u5B9A");
     throw new Error("KV\u5B58\u50A8\u672A\u7ED1\u5B9A");
   }
+  const now = Date.now();
+  if (cachedConfig && now - cachedAt < CONFIG_CACHE_TTL_MS) {
+    return { ...cachedConfig };
+  }
   const data = await env.SUBSCRIPTIONS_KV.get("config");
   console.log("[\u914D\u7F6E] \u4ECEKV\u8BFB\u53D6\u914D\u7F6E:", data ? "\u6210\u529F" : "\u7A7A\u914D\u7F6E");
   const config = data ? JSON.parse(data) : {};
@@ -49,16 +53,40 @@ async function getConfig(env) {
     const updatedConfig = { ...config, JWT_SECRET: jwtSecret };
     await env.SUBSCRIPTIONS_KV.put("config", JSON.stringify(updatedConfig));
   }
-  return {
+  const result = {
     ...DEFAULT_CONFIG,
     ...config,
     JWT_SECRET: jwtSecret
   };
+  cachedConfig = result;
+  cachedAt = now;
+  return { ...result };
 }
 async function setConfig(env, config) {
   await putKVJson(env, "config", config);
+  let secret = config.JWT_SECRET;
+  if (!secret) {
+    if (cachedConfig && cachedConfig.JWT_SECRET) {
+      secret = cachedConfig.JWT_SECRET;
+    } else {
+      try {
+        const prev = await env.SUBSCRIPTIONS_KV.get("config");
+        if (prev) {
+          const parsed = JSON.parse(prev);
+          if (parsed.JWT_SECRET) secret = parsed.JWT_SECRET;
+        }
+      } catch (err) {
+        console.error("[\u914D\u7F6E] \u8BFB\u53D6\u65E7 JWT_SECRET \u5931\u8D25:", err);
+      }
+    }
+  }
+  const merged = { ...DEFAULT_CONFIG, ...config };
+  if (secret) merged.JWT_SECRET = secret;
+  cachedConfig = merged;
+  cachedAt = Date.now();
+  return merged;
 }
-var DEFAULT_CONFIG;
+var DEFAULT_CONFIG, cachedConfig, cachedAt, CONFIG_CACHE_TTL_MS;
 var init_config = __esm({
   "src/data/config.js"() {
     "use strict";
@@ -111,6 +139,9 @@ var init_config = __esm({
       DINGTALK_AT_MOBILES: "",
       DINGTALK_AT_ALL: "false"
     };
+    cachedConfig = null;
+    cachedAt = 0;
+    CONFIG_CACHE_TTL_MS = 30 * 1e3;
   }
 });
 
@@ -1435,18 +1466,21 @@ function buildTimezoneDate(year, month, day, timezone) {
 }
 async function getAllSubscriptions(env) {
   try {
-    const { listForSubscription: listForSubscription2, formatRulesSummary: formatRulesSummary2, legacyFieldToRule: legacyFieldToRule2 } = await Promise.resolve().then(() => (init_reminders_repo(), reminders_repo_exports));
     const subs = await listAll(env);
     return Promise.all(
       subs.map(async (sub) => {
-        let rules = await listForSubscription2(env, sub.id);
-        if (rules.length === 0) {
-          rules = [legacyFieldToRule2(sub)];
+        let summary = sub.reminderRulesSummary;
+        if (!summary) {
+          const { listForSubscription: listForSubscription2, formatRulesSummary: formatRulesSummary2, legacyFieldToRule: legacyFieldToRule2 } = await Promise.resolve().then(() => (init_reminders_repo(), reminders_repo_exports));
+          let rules = await listForSubscription2(env, sub.id);
+          if (rules.length === 0) {
+            rules = [legacyFieldToRule2(sub)];
+          }
+          summary = formatRulesSummary2(rules);
         }
         return {
           ...sub,
-          reminderRules: rules,
-          reminderRulesSummary: formatRulesSummary2(rules)
+          reminderRulesSummary: summary
         };
       })
     );
@@ -1457,7 +1491,7 @@ async function getAllSubscriptions(env) {
 }
 async function syncLegacyReminderFields(env, subId, rules) {
   try {
-    const { deriveLegacyFromRules: deriveLegacyFromRules2 } = await Promise.resolve().then(() => (init_reminders_repo(), reminders_repo_exports));
+    const { deriveLegacyFromRules: deriveLegacyFromRules2, formatRulesSummary: formatRulesSummary2 } = await Promise.resolve().then(() => (init_reminders_repo(), reminders_repo_exports));
     const existing = await getById(env, subId);
     if (!existing) return;
     const legacy = deriveLegacyFromRules2(rules);
@@ -1467,6 +1501,7 @@ async function syncLegacyReminderFields(env, subId, rules) {
       reminderValue: legacy.value,
       reminderDays: legacy.unit === "day" ? legacy.value : void 0,
       reminderHours: legacy.unit === "hour" ? legacy.value : void 0,
+      reminderRulesSummary: formatRulesSummary2(rules),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
@@ -1969,39 +2004,76 @@ async function writeLog2(env, entry) {
   });
   return { key, ...stored };
 }
-async function query(env, filter = {}) {
+async function queryPage(env, filter = {}) {
+  return queryInternal(env, filter);
+}
+async function queryInternal(env, filter = {}) {
   const limit = Math.min(500, Math.max(1, filter.limit || 100));
-  const all = [];
-  let cursor;
-  do {
+  const sinceMs = filter.since ? new Date(filter.since).getTime() : 0;
+  const untilMs = filter.until ? new Date(filter.until).getTime() : Number.POSITIVE_INFINITY;
+  const out = [];
+  let currentHour;
+  if (filter.cursor && /^\d{10}$/.test(String(filter.cursor))) {
+    currentHour = String(filter.cursor);
+  } else {
+    const anchor = untilMs === Number.POSITIVE_INFINITY ? Date.now() : Math.min(Date.now(), untilMs);
+    currentHour = ymdhUtc(new Date(anchor));
+  }
+  const MAX_SCAN = 720;
+  let guard = 0;
+  while (out.length < limit && guard < MAX_SCAN) {
+    guard++;
     const res = await env.SUBSCRIPTIONS_KV.list({
-      prefix: PREFIX2,
-      cursor,
+      prefix: PREFIX2 + currentHour,
       limit: 1e3
     });
-    for (const k of res.keys) all.push(k.name);
-    cursor = res.list_complete ? void 0 : res.cursor;
-  } while (cursor && all.length < 5e3);
-  all.sort((a, b) => b.localeCompare(a));
-  const sinceTs = filter.since ? new Date(filter.since).getTime() : 0;
-  const untilTs = filter.until ? new Date(filter.until).getTime() : Number.POSITIVE_INFINITY;
-  const out = [];
-  for (const key of all) {
-    if (out.length >= limit) break;
-    const raw2 = await env.SUBSCRIPTIONS_KV.get(key);
-    if (!raw2) continue;
-    try {
-      const obj = JSON.parse(raw2);
-      if (filter.subId && obj.subId !== filter.subId) continue;
-      if (filter.channel && obj.channel !== filter.channel) continue;
-      if (filter.status && obj.status !== filter.status) continue;
-      const tsMs = new Date(obj.timestamp).getTime();
-      if (tsMs < sinceTs || tsMs > untilTs) continue;
-      out.push({ key, ...obj });
-    } catch {
+    const keys = res.keys.map((k) => k.name).sort((a, b) => b.localeCompare(a));
+    for (const key of keys) {
+      if (out.length >= limit) break;
+      const raw2 = await env.SUBSCRIPTIONS_KV.get(key);
+      if (!raw2) continue;
+      try {
+        const obj = JSON.parse(raw2);
+        if (filter.subId && obj.subId !== filter.subId) continue;
+        if (filter.channel && obj.channel !== filter.channel) continue;
+        if (filter.status && obj.status !== filter.status) continue;
+        const tsMs = new Date(obj.timestamp).getTime();
+        if (tsMs < sinceMs || tsMs > untilMs) continue;
+        out.push({ key, ...obj });
+      } catch {
+      }
     }
+    const prev = hourMinus1(currentHour);
+    if (prev === currentHour) {
+      currentHour = null;
+      break;
+    }
+    if (sinceMs > 0) {
+      const hourStartMs = Date.UTC(
+        Number(prev.slice(0, 4)),
+        Number(prev.slice(4, 6)) - 1,
+        Number(prev.slice(6, 8)),
+        Number(prev.slice(8, 10))
+      );
+      if (hourStartMs < sinceMs) {
+        currentHour = null;
+        break;
+      }
+    }
+    currentHour = prev;
   }
-  return out;
+  return { items: out, nextCursor: currentHour };
+}
+function hourMinus1(ymdh) {
+  const d = new Date(Date.UTC(
+    Number(ymdh.slice(0, 4)),
+    Number(ymdh.slice(4, 6)) - 1,
+    Number(ymdh.slice(6, 8)),
+    Number(ymdh.slice(8, 10))
+  ));
+  d.setUTCHours(d.getUTCHours() - 1);
+  const next = ymdhUtc(d);
+  return next === ymdh ? ymdh : next;
 }
 var PREFIX2, DEFAULT_TTL_SEC2;
 var init_notification_logs_repo = __esm({
@@ -2236,10 +2308,11 @@ async function handleNotifyLogsList(request, env) {
     ),
     since: url.searchParams.get("since") || void 0,
     until: url.searchParams.get("until") || void 0,
-    limit: Number(url.searchParams.get("limit") || 100)
+    limit: Number(url.searchParams.get("limit") || 100),
+    cursor: url.searchParams.get("cursor") || void 0
   };
-  const logs = await query(env, filter);
-  return json({ success: true, logs });
+  const { items, nextCursor } = await queryPage(env, filter);
+  return json({ success: true, logs: items, nextCursor });
 }
 async function handleSchedLogsList(request, env) {
   const url = new URL(request.url);
@@ -13202,6 +13275,15 @@ var notifyLogsPage_default = `<!DOCTYPE html>
         </table>
       </div>
     </div>
+
+    <!-- \u52A0\u8F7D\u66F4\u591A\uFF08\u6E38\u6807\u5206\u9875\uFF09 -->
+    <div id="loadMoreWrap" class="hidden text-center py-5">
+      <button id="loadMoreBtn" type="button"
+        class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+        <i class="fas fa-chevron-down mr-2"></i>\u52A0\u8F7D\u66F4\u591A
+      </button>
+      <p id="loadMoreHint" class="text-xs text-gray-400 mt-2"></p>
+    </div>
   </div>
 
   <script>
@@ -13299,6 +13381,10 @@ var notifyLogsPage_default = `<!DOCTYPE html>
      */
     let userTz = 'UTC';
     let subNameMap = {};
+    // \u6E38\u6807\u5206\u9875\u72B6\u6001
+    let allLogs = [];
+    let nextCursor = null;
+    let loadingMore = false;
 
     function fmtTime(iso) {
       try {
@@ -13393,7 +13479,7 @@ var notifyLogsPage_default = `<!DOCTYPE html>
       }
     }
 
-    async function loadLogs() {
+    async function loadLogs(append) {
       const subId = document.getElementById('filterSubId').value.trim();
       const channel = document.getElementById('filterChannel').value;
       const status = document.getElementById('filterStatus').value;
@@ -13406,23 +13492,47 @@ var notifyLogsPage_default = `<!DOCTYPE html>
       if (sinceHours) {
         params.since = new Date(Date.now() - Number(sinceHours) * 3600 * 1000).toISOString();
       }
+      if (append && nextCursor) params.cursor = nextCursor;
 
       const tbody = document.getElementById('logsBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">\u52A0\u8F7D\u4E2D\u2026</td></tr>';
+      const btn = document.getElementById('loadMoreBtn');
+      if (!append) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">\u52A0\u8F7D\u4E2D\u2026</td></tr>';
+        document.getElementById('loadMoreWrap').classList.add('hidden');
+      }
       try {
         const data = await ApiClient.get('/api/notification-logs', params);
         const logs = (data && data.logs) || [];
-
-        document.getElementById('metricTotal').textContent = logs.length;
-        document.getElementById('metricSuccess').textContent = logs.filter(l => l.status === 'success').length;
-        document.getElementById('metricFailed').textContent = logs.filter(l => l.status === 'failed').length;
-        document.getElementById('metricLatest').textContent = logs.length ? fmtTime(logs[0].timestamp) : '-';
-
-        if (logs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">\u6CA1\u6709\u5339\u914D\u7684\u8BB0\u5F55</td></tr>';
-          return;
+        nextCursor = (data && data.nextCursor) || null;
+        if (!append) allLogs = [];
+        allLogs = allLogs.concat(logs);
+        renderMetrics();
+        renderRows();
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>\u52A0\u8F7D\u66F4\u591A'; }
+      } catch (err) {
+        if (append) {
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>\u52A0\u8F7D\u66F4\u591A'; }
+          const hint = document.getElementById('loadMoreHint');
+          if (hint) hint.textContent = '\u52A0\u8F7D\u5931\u8D25\uFF1A' + err.message;
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-500">\u52A0\u8F7D\u5931\u8D25\uFF1A' + escapeHtml(err.message) + '</td></tr>';
         }
-        tbody.innerHTML = logs.map(l => {
+      }
+    }
+
+    function renderMetrics() {
+      document.getElementById('metricTotal').textContent = allLogs.length;
+      document.getElementById('metricSuccess').textContent = allLogs.filter(l => l.status === 'success').length;
+      document.getElementById('metricFailed').textContent = allLogs.filter(l => l.status === 'failed').length;
+      document.getElementById('metricLatest').textContent = allLogs.length ? fmtTime(allLogs[0].timestamp) : '-';
+    }
+
+    function renderRows() {
+      const tbody = document.getElementById('logsBody');
+      if (allLogs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-gray-400">\u6CA1\u6709\u5339\u914D\u7684\u8BB0\u5F55</td></tr>';
+      } else {
+        tbody.innerHTML = allLogs.map(l => {
           const subName = subNameMap[l.subId] || l.subId;
           const rowClass = l.status === 'failed' ? 'row-failed' : 'row-success';
           return '<tr class="' + rowClass + ' hover:bg-opacity-75">'
@@ -13434,9 +13544,9 @@ var notifyLogsPage_default = `<!DOCTYPE html>
             + '<td class="px-4 py-3 align-top text-xs">' + buildDetail(l) + '</td>'
             + '</tr>';
         }).join('');
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-12 text-center text-red-500">\u52A0\u8F7D\u5931\u8D25\uFF1A' + escapeHtml(err.message) + '</td></tr>';
       }
+      const wrap = document.getElementById('loadMoreWrap');
+      if (wrap) wrap.classList.toggle('hidden', !nextCursor);
     }
 
     // \u2500\u2500\u2500 \u4E8B\u4EF6\u7ED1\u5B9A \u2500\u2500\u2500
@@ -13448,6 +13558,16 @@ var notifyLogsPage_default = `<!DOCTYPE html>
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', loadLogs);
     });
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', () => {
+        if (loadingMore) return;
+        loadingMore = true;
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>\u52A0\u8F7D\u4E2D\u2026';
+        loadLogs(true).finally(() => { loadingMore = false; });
+      });
+    }
 
     // \u2500\u2500\u2500 \u5B9E\u65F6\u65F6\u949F\uFF08\u4E0E\u5176\u4ED6 admin \u9875\u4E00\u81F4\u7684\u5B9E\u73B0\uFF09\u2500\u2500\u2500
     function formatTimezoneDisplay(tz) {
@@ -13724,7 +13844,7 @@ async function handleDebug(request, env) {
 init_subscriptions_repo();
 init_reminders_repo();
 init_scheduler_logs_repo();
-var SCHEMA_VERSION = "v3";
+var SCHEMA_VERSION = "v4";
 var KEY_SCHEMA_VERSION = "schema_version";
 var KEY_MIGRATION_LOCK = "migration_lock";
 var LOCK_TTL_SEC = 60;
@@ -13744,6 +13864,11 @@ var MIGRATION_STEPS = [
     id: "scheduler_logs_v3",
     description: "\u628A\u65E7 scheduler_status_history \u5408\u5E76\u5230 sched_log:{iso}",
     run: migrateSchedulerLogs
+  },
+  {
+    id: "sub_summary_v3",
+    description: "\u7ED9\u8BA2\u9605\u5185\u5D4C\u63D0\u9192\u6458\u8981\u5B57\u6BB5\uFF0C\u5217\u8868\u9875\u4E0D\u518D\u9010\u6761\u8BFB\u89C4\u5219",
+    run: migrateSubSummaries
   }
 ];
 var cachedSchemaVersion = (
@@ -13757,7 +13882,7 @@ async function ensureMigrations(env) {
   const current = await env.SUBSCRIPTIONS_KV.get(KEY_SCHEMA_VERSION);
   if (current === SCHEMA_VERSION) {
     cachedSchemaVersion = SCHEMA_VERSION;
-    return { migrated: false, reason: "already_v3" };
+    return { migrated: false, reason: "already_" + SCHEMA_VERSION };
   }
   const acquired = await tryAcquireLock(env);
   if (!acquired) {
@@ -13838,6 +13963,20 @@ async function migrateReminderRules(env) {
     count++;
   }
   console.log(`[migrate:reminder_rules_v3] \u5DF2\u4E3A ${count} \u4E2A\u8BA2\u9605\u751F\u6210\u9ED8\u8BA4\u63D0\u9192\u89C4\u5219`);
+}
+async function migrateSubSummaries(env) {
+  const subs = await listAll(env);
+  let count = 0;
+  for (const sub of subs) {
+    if (sub && sub.reminderRulesSummary) continue;
+    let rules = await listForSubscription(env, sub.id);
+    if (rules.length === 0) {
+      rules = [legacyFieldToRule(sub)];
+    }
+    await save(env, { ...sub, reminderRulesSummary: formatRulesSummary(rules) });
+    count++;
+  }
+  console.log(`[migrate:sub_summary_v3] \u5DF2\u4E3A ${count} \u4E2A\u8BA2\u9605\u8865\u5185\u5D4C\u6458\u8981`);
 }
 async function migrateSchedulerLogs(env) {
   const histRaw = await env.SUBSCRIPTIONS_KV.get("scheduler_status_history");
@@ -13929,7 +14068,6 @@ var app_default = app;
 
 // src/services/scheduler.js
 init_config();
-init_subscriptions();
 init_subscriptions_repo();
 init_reminders_repo();
 init_scheduler_logs_repo();
@@ -13964,7 +14102,7 @@ async function checkExpiringSubscriptions(env) {
       return /^\d+$/.test(h) ? h.padStart(2, "0") : up;
     }) : [];
     const inWindow = normalizedHours.length === 0 || normalizedHours.includes("*") || normalizedHours.includes("ALL") || normalizedHours.includes(now.hourString);
-    const subscriptions = await getAllSubscriptions(env);
+    const subscriptions = await listAll(env);
     let activeCount = 0;
     let matchedCount = 0;
     let dedupedCount = 0;

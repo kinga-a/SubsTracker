@@ -9,7 +9,7 @@ import { env } from 'cloudflare:test';
 import app from '../../src/app.js';
 import * as subRepo from '../../src/data/subscriptions.repo.js';
 import * as remindersRepo from '../../src/data/reminders.repo.js';
-import { getConfig } from '../../src/data/config.js';
+import { getConfig, _resetConfigCache } from '../../src/data/config.js';
 import { putKVJson } from '../../src/data/kv.js';
 
 async function clearKv() {
@@ -41,7 +41,10 @@ async function loginCookie() {
   return res.headers.get('Set-Cookie')?.split(';')[0] || '';
 }
 
-beforeEach(clearKv);
+beforeEach(async () => {
+  await clearKv();
+  _resetConfigCache();
+});
 
 describe('GET /api/backup', () => {
   it('未授权 → 401', async () => {

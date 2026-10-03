@@ -22,7 +22,7 @@ import * as remindersRepo from './reminders.repo.js';
 import * as schedulerLogsRepo from './scheduler-logs.repo.js';
 
 /** 当前 schema 版本字符串 */
-export const SCHEMA_VERSION = 'v3';
+export const SCHEMA_VERSION = 'v4';
 
 const KEY_SCHEMA_VERSION = 'schema_version';
 const KEY_MIGRATION_LOCK = 'migration_lock';
@@ -52,6 +52,11 @@ export const MIGRATION_STEPS = [
     id: 'scheduler_logs_v3',
     description: '把旧 scheduler_status_history 合并到 sched_log:{iso}',
     run: migrateSchedulerLogs
+  },
+  {
+    id: 'sub_summary_v3',
+    description: '给订阅内嵌提醒摘要字段，列表页不再逐条读规则',
+    run: migrateSubSummaries
   }
 ];
 
@@ -78,7 +83,7 @@ export async function ensureMigrations(env) {
   const current = await env.SUBSCRIPTIONS_KV.get(KEY_SCHEMA_VERSION);
   if (current === SCHEMA_VERSION) {
     cachedSchemaVersion = SCHEMA_VERSION;
-    return { migrated: false, reason: 'already_v3' };
+    return { migrated: false, reason: 'already_' + SCHEMA_VERSION };
   }
 
   // 尝试加锁
@@ -225,6 +230,33 @@ export async function migrateReminderRules(env) {
     count++;
   }
   console.log(`[migrate:reminder_rules_v3] 已为 ${count} 个订阅生成默认提醒规则`);
+}
+
+/**
+ * 迁移：给每个订阅内嵌 reminderRulesSummary 摘要字段。
+ *
+ * 背景：getAllSubscriptions 从"逐条读 reminder_rules:{subId} 计算摘要"改为
+ * "直接读 sub:{id} 上的内嵌摘要"（读从 2N+1 降到 N+1）。
+ * 本 step 为迁移前的存量订阅补齐摘要，之后新写入/规则变更由
+ * syncLegacyReminderFields 维护该字段。
+ *
+ * 幂等性：已有摘要的订阅跳过；重复执行不会重复写。
+ *
+ * @param {{ SUBSCRIPTIONS_KV: KVNamespace }} env
+ */
+export async function migrateSubSummaries(env) {
+  const subs = await subRepo.listAll(env);
+  let count = 0;
+  for (const sub of subs) {
+    if (sub && sub.reminderRulesSummary) continue;
+    let rules = await remindersRepo.listForSubscription(env, sub.id);
+    if (rules.length === 0) {
+      rules = [remindersRepo.legacyFieldToRule(sub)];
+    }
+    await subRepo.save(env, { ...sub, reminderRulesSummary: remindersRepo.formatRulesSummary(rules) });
+    count++;
+  }
+  console.log(`[migrate:sub_summary_v3] 已为 ${count} 个订阅补内嵌摘要`);
 }
 
 /**

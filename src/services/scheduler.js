@@ -29,7 +29,6 @@
  */
 
 import { getConfig } from '../data/config.js';
-import { getAllSubscriptions } from '../data/subscriptions.js';
 import * as subRepo from '../data/subscriptions.repo.js';
 import * as remindersRepo from '../data/reminders.repo.js';
 import * as schedulerLogsRepo from '../data/scheduler-logs.repo.js';
@@ -114,7 +113,9 @@ export async function checkExpiringSubscriptions(env) {
       normalizedHours.includes('ALL') ||
       normalizedHours.includes(now.hourString);
 
-    const subscriptions = await getAllSubscriptions(env);
+    // 只读订阅本体（N+1 次读）；提醒规则在循环内按需逐条读取一次，
+    // 不再先 getAllSubscriptions（内部也读规则）再重复读取，每 tick 省 N 次 KV 读。
+    const subscriptions = await subRepo.listAll(env);
     let activeCount = 0;
     let matchedCount = 0;
     let dedupedCount = 0;
