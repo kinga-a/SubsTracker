@@ -13291,7 +13291,7 @@ var notifyLogsPage_default = `<!DOCTYPE html>
  * \u7B80\u6613 API \u5BA2\u6237\u7AEF
  *
  * \u7528\u6CD5\uFF08\u6D4F\u89C8\u5668\u5168\u5C40\uFF09\uFF1A
- *   <script src="/js/lib/api-client.js"><\/script>
+ *   \u5728\u9875\u9762\u5F15\u5165 /js/lib/api-client.js\uFF08\u6216\u672C\u5185\u8054\u526F\u672C\uFF09\u540E\u76F4\u63A5\u8C03\u7528\uFF1A
  *   const r = await ApiClient.get('/api/notification-logs');
  *
  * \u6240\u6709\u65B9\u6CD5\u90FD\u8FD4\u56DE\u89E3\u6790\u540E\u7684 JSON\uFF1BHTTP \u975E 2xx \u4F1A\u629B\u51FA\u542B status / body \u7684 Error\u3002
